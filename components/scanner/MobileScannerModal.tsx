@@ -95,10 +95,27 @@ export default function MobileScannerModal({
   const scanModeRef = useRef(scanMode);
   scanModeRef.current = scanMode;
 
+  // 📋 Estructura de Datos para la Confirmación de Escaneo
+  interface PendingConfirmationData {
+    code: string;
+    format: string;
+    workflow: 'slotting' | 'lookup' | 'delivery' | 'general';
+    location: string;
+    anaquel: 'A1' | 'A2' | 'REC' | 'DSP';
+    piso: 'P1' | 'P2' | 'P3';
+    pkg?: Paquete;
+    cli?: Cliente;
+    detectedAt: number;
+  }
+
+  // Estado de confirmación pendiente (Requiere aprobación del usuario antes de guardar)
+  const [pendingConfirmation, setPendingConfirmation] = useState<PendingConfirmationData | null>(null);
+  const pendingConfirmationRef = useRef<PendingConfirmationData | null>(null);
+  pendingConfirmationRef.current = pendingConfirmation;
+
   // Ficha 360° para Modo Consulta / Localización
   const [lookupResult, setLookupResult] = useState<{ pkg?: Paquete; cli?: Cliente; rawCode: string } | null>(null);
 
-  const [pendingScan, setPendingScan] = useState<{ code: string; format: string } | null>(null);
   const [lastScannedCode, setLastScannedCode] = useState<{ code: string; location?: string; time: number } | null>(null);
   const [detectedBox, setDetectedBox] = useState<BarcodeBoundingBox | null>(null);
   const [recentFlash, setRecentFlash] = useState(false);
@@ -209,13 +226,18 @@ export default function MobileScannerModal({
     });
   }, []);
 
-  // Procesamiento de código detectado (Siempre lee refs en tiempo real)
+  // 🔔 Procesamiento de código detectado: Emite Beep + Haptic y Solicita Confirmación al Usuario
   const handleBarcodeFound = useCallback((code: string, format: string, boundingBox?: BarcodeBoundingBox) => {
     const now = Date.now();
     const cleanCode = code.trim();
     if (!cleanCode) return;
 
-    // Debounce de 1.8s
+    // Si ya existe una confirmación en pantalla, evitar superposición
+    if (pendingConfirmationRef.current) {
+      return;
+    }
+
+    // Debounce de 1.8s para el mismo código consecutivo
     if (lastCodeTimeRef.current.code === cleanCode && now - lastCodeTimeRef.current.timestamp < 1800) {
       return;
     }
@@ -233,6 +255,7 @@ export default function MobileScannerModal({
       }, 800);
     }
 
+    // 🔊 Sonido Beep y Vibración Inmediatos
     playScanBeep();
     triggerHaptic();
 
@@ -242,39 +265,71 @@ export default function MobileScannerModal({
     const activePiso = selectedPisoRef.current;
     const activeLocation = `${activeAnaquel}-${activePiso}`;
 
-    if (activeWorkflow === 'slotting') {
-      setLastScannedCode({ code: cleanCode, location: activeLocation, time: now });
+    // Buscar paquete y cliente en el sistema para enriquecer la confirmación
+    const upper = cleanCode.toUpperCase();
+    const currentPackages = paquetesRef.current;
+    const currentClients = clientesRef.current;
+
+    const foundPkg = currentPackages.find(p =>
+      p.numeroReciboBodega.toUpperCase() === upper ||
+      p.trackingUsa.toUpperCase() === upper ||
+      p.codigoCasillero.toUpperCase() === upper
+    );
+
+    const foundCli = currentClients.find(c =>
+      c.codigoCasillero.toUpperCase() === upper ||
+      c.documentoIdentidad === upper ||
+      (foundPkg && c.codigoCasillero.toUpperCase() === foundPkg.codigoCasillero.toUpperCase())
+    );
+
+    // 🛑 NO GUARDAR AUTOMÁTICAMENTE: Presentar diálogo de confirmación interactivo
+    setPendingConfirmation({
+      code: cleanCode,
+      format,
+      workflow: activeWorkflow,
+      location: activeLocation,
+      anaquel: activeAnaquel,
+      piso: activePiso,
+      pkg: foundPkg,
+      cli: foundCli,
+      detectedAt: now
+    });
+  }, [playScanBeep, triggerHaptic]);
+
+  // ✅ Acción: Usuario Confirma el Código Escaneado
+  const handleConfirmScan = (confirmedData: PendingConfirmationData) => {
+    const { code, format, workflow, anaquel, piso } = confirmedData;
+    const now = Date.now();
+    const targetLocation = `${anaquel}-${piso}`;
+
+    if (workflow === 'slotting') {
+      setLastScannedCode({ code, location: targetLocation, time: now });
       if (onSlotPackageRef.current) {
-        onSlotPackageRef.current(cleanCode, activeLocation);
+        onSlotPackageRef.current(code, targetLocation);
       }
       if (onConfirmRef.current) {
-        onConfirmRef.current(cleanCode, format, { mode: 'slotting', location: activeLocation });
+        onConfirmRef.current(code, format, { mode: 'slotting', location: targetLocation });
       }
-    } else if (activeWorkflow === 'lookup') {
-      setLastScannedCode({ code: cleanCode, time: now });
-      performLookup(cleanCode);
+    } else if (workflow === 'lookup') {
+      setLastScannedCode({ code, time: now });
+      performLookup(code);
       if (onConfirmRef.current) {
-        onConfirmRef.current(cleanCode, format, { mode: 'lookup' });
+        onConfirmRef.current(code, format, { mode: 'lookup' });
       }
     } else {
-      setLastScannedCode({ code: cleanCode, time: now });
-      if (scanModeRef.current === 'burst') {
-        if (onConfirmRef.current) {
-          onConfirmRef.current(cleanCode, format, { mode: activeWorkflow });
-        }
-      } else {
-        setPendingScan({ code: cleanCode, format });
-        scanLoopActiveRef.current = false;
-        if (videoRef.current) {
-          try {
-            videoRef.current.pause();
-          } catch {
-            // Silent
-          }
-        }
+      setLastScannedCode({ code, time: now });
+      if (onConfirmRef.current) {
+        onConfirmRef.current(code, format, { mode: workflow });
       }
     }
-  }, [performLookup, playScanBeep, triggerHaptic]);
+
+    setPendingConfirmation(null);
+  };
+
+  // ❌ Acción: Usuario Descarta el Escaneo
+  const handleCancelScan = () => {
+    setPendingConfirmation(null);
+  };
 
   // Mantener un ref siempre actualizado a handleBarcodeFound para que ningún closure quede desactualizado
   const handleBarcodeFoundRef = useRef(handleBarcodeFound);
@@ -378,6 +433,17 @@ export default function MobileScannerModal({
   // Bucle de escaneo nativo GPU (Llama a handleBarcodeFoundRef.current para garantizar datos en vivo)
   const startNativeDetectionLoop = useCallback(() => {
     if (!scanLoopActiveRef.current) return;
+
+    // Si hay una confirmación pendiente, pausar las lecturas hasta que el usuario decida
+    if (pendingConfirmationRef.current) {
+      setTimeout(() => {
+        if (scanLoopActiveRef.current) {
+          requestAnimationFrame(startNativeDetectionLoop);
+        }
+      }, 150);
+      return;
+    }
+
     const video = videoRef.current;
     const detector = nativeDetectorRef.current as {
       detect: (image: ImageBitmapSource) => Promise<Array<{ rawValue: string; format: string; boundingBox?: DOMRectReadOnly }>>;
@@ -1215,6 +1281,236 @@ export default function MobileScannerModal({
           </div>
         )}
 
+        {/* 📋 DIÁLOGO INTERACTIVO DE CONFIRMACIÓN DE ESCANEO */}
+        {pendingConfirmation && (
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              zIndex: 50,
+              backgroundColor: 'rgba(2, 6, 23, 0.92)',
+              backdropFilter: 'blur(6px)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '12px',
+              animation: 'fadeIn 0.2s ease-out'
+            }}
+          >
+            <div
+              style={{
+                width: '100%',
+                maxWidth: '400px',
+                background: '#ffffff',
+                borderRadius: '16px',
+                padding: '18px',
+                boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
+                border: '2.5px solid #22c55e',
+                textAlign: 'left'
+              }}
+            >
+              {/* Encabezado */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', borderBottom: '1px solid #e2e8f0', paddingBottom: '10px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: '#dcfce7', color: '#16a34a', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 0 10px rgba(34,197,94,0.3)' }}>
+                    <CheckCircle2 className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 800, color: '#0f172a' }}>
+                      Confirmar Código Escaneado
+                    </h4>
+                    <span style={{ fontSize: '11px', color: '#64748b' }}>
+                      Código detectado · Confirma para registrar
+                    </span>
+                  </div>
+                </div>
+                <button
+                  onClick={handleCancelScan}
+                  title="Descartar lectura"
+                  style={{
+                    background: '#f1f5f9',
+                    border: 'none',
+                    borderRadius: '50%',
+                    width: '28px',
+                    height: '28px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    color: '#64748b',
+                    fontWeight: 800,
+                    fontSize: '13px'
+                  }}
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* Visor del Código Escaneado */}
+              <div
+                style={{
+                  background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
+                  borderRadius: '10px',
+                  padding: '12px 14px',
+                  marginBottom: '12px',
+                  border: '1.5px solid #334155',
+                  color: '#ffffff'
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                  <span style={{ fontSize: '10px', fontWeight: 800, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                    Código de Barras / QR:
+                  </span>
+                  <span style={{ fontSize: '9.5px', fontWeight: 800, padding: '2px 6px', borderRadius: '4px', background: '#3b82f6', color: '#ffffff' }}>
+                    {pendingConfirmation.format}
+                  </span>
+                </div>
+                <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '18px', fontWeight: 900, color: '#4ade80', wordBreak: 'break-all', letterSpacing: '0.5px' }}>
+                  {pendingConfirmation.code}
+                </div>
+              </div>
+
+              {/* Información del Paquete si existe en BD */}
+              {pendingConfirmation.pkg ? (
+                <div style={{ background: '#f8fafc', border: '1.5px solid #e2e8f0', borderRadius: '10px', padding: '10px 12px', marginBottom: '12px', fontSize: '11.5px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '5px', color: '#1e3a8a', fontWeight: 800 }}>
+                      <User className="w-3.5 h-3.5 text-blue-600" />
+                      <span>{pendingConfirmation.pkg.nombreConsignatario || pendingConfirmation.cli?.nombre || 'Cliente'}</span>
+                    </div>
+                    <span style={{ fontSize: '10.5px', fontWeight: 800, background: '#dbeafe', color: '#1e40af', padding: '2px 6px', borderRadius: '4px' }}>
+                      {pendingConfirmation.pkg.codigoCasillero}
+                    </span>
+                  </div>
+
+                  {pendingConfirmation.pkg.descripcion && (
+                    <div style={{ color: '#334155', fontSize: '11px', fontWeight: 600, marginBottom: '6px' }}>
+                      📦 {pendingConfirmation.pkg.descripcion}
+                    </div>
+                  )}
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', fontSize: '10.5px', background: '#ffffff', padding: '6px 8px', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
+                    <div>
+                      <span style={{ color: '#64748b' }}>Peso:</span> <strong>{pendingConfirmation.pkg.pesoKg} Kg</strong>
+                    </div>
+                    <div>
+                      <span style={{ color: '#64748b' }}>Estado:</span> <strong style={{ color: '#16a34a' }}>{pendingConfirmation.pkg.estadoEntrega}</strong>
+                    </div>
+                    <div style={{ gridColumn: 'span 2' }}>
+                      <span style={{ color: '#64748b' }}>Ubicación Actual:</span> <strong>{pendingConfirmation.pkg.posicionEstante || pendingConfirmation.pkg.ubicacionActual || 'Recepción'}</strong>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '10px', padding: '9px 12px', marginBottom: '12px', fontSize: '11.5px', color: '#1e40af', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Sparkles className="w-4 h-4 text-blue-600 shrink-0" />
+                  <span>Código detectado. Listo para registrar en la base de datos.</span>
+                </div>
+              )}
+
+              {/* Selector de Destino en Modo Asignar Anaquel (Slotting) */}
+              {pendingConfirmation.workflow === 'slotting' && (
+                <div style={{ background: '#f0fdf4', border: '1.5px solid #86efac', borderRadius: '10px', padding: '10px 12px', marginBottom: '14px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                    <label style={{ fontSize: '11px', fontWeight: 800, color: '#166534', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <Layers className="w-3.5 h-3.5 text-green-600" /> Asignar a Anaquel y Piso:
+                    </label>
+                    <span style={{ fontFamily: 'JetBrains Mono', fontSize: '12px', fontWeight: 900, color: '#15803d', background: '#dcfce7', padding: '2px 8px', borderRadius: '4px' }}>
+                      {pendingConfirmation.anaquel}-{pendingConfirmation.piso}
+                    </span>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '6px' }}>
+                    <select
+                      value={pendingConfirmation.anaquel}
+                      onChange={e => {
+                        const val = e.target.value as 'A1' | 'A2' | 'REC' | 'DSP';
+                        setPendingConfirmation(prev => prev ? { ...prev, anaquel: val, location: `${val}-${prev.piso}` } : null);
+                      }}
+                      style={{
+                        height: '36px',
+                        borderRadius: '6px',
+                        border: '1.5px solid #86efac',
+                        background: '#ffffff',
+                        fontWeight: 800,
+                        fontSize: '12px',
+                        color: '#14532d',
+                        padding: '0 6px',
+                        outline: 'none'
+                      }}
+                    >
+                      <option value="A1">🟦 Anaquel 1 (A1)</option>
+                      <option value="A2">🟩 Anaquel 2 (A2)</option>
+                      <option value="REC">🟨 Recepción (REC)</option>
+                      <option value="DSP">🟪 Despacho (DSP)</option>
+                    </select>
+
+                    <select
+                      value={pendingConfirmation.piso}
+                      onChange={e => {
+                        const val = e.target.value as 'P1' | 'P2' | 'P3';
+                        setPendingConfirmation(prev => prev ? { ...prev, piso: val, location: `${prev.anaquel}-${val}` } : null);
+                      }}
+                      style={{
+                        height: '36px',
+                        borderRadius: '6px',
+                        border: '1.5px solid #86efac',
+                        background: '#ffffff',
+                        fontWeight: 800,
+                        fontSize: '12px',
+                        color: '#14532d',
+                        padding: '0 6px',
+                        outline: 'none'
+                      }}
+                    >
+                      <option value="P1">⬇️ Piso 1</option>
+                      <option value="P2">↔️ Piso 2</option>
+                      <option value="P3">⬆️ Piso 3</option>
+                    </select>
+                  </div>
+                </div>
+              )}
+
+              {/* Botones de Confirmación y Cancelación */}
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  onClick={() => handleConfirmScan(pendingConfirmation)}
+                  className="btn btn-primary"
+                  style={{
+                    flex: 1.5,
+                    height: '42px',
+                    background: '#16a34a',
+                    borderColor: '#15803d',
+                    fontSize: '13px',
+                    fontWeight: 800,
+                    borderRadius: '8px',
+                    justifyContent: 'center',
+                    gap: '6px',
+                    boxShadow: '0 4px 12px rgba(22, 163, 74, 0.35)'
+                  }}
+                >
+                  <CheckCircle2 className="w-4 h-4" /> Confirmar y Guardar
+                </button>
+
+                <button
+                  onClick={handleCancelScan}
+                  className="btn btn-secondary"
+                  style={{
+                    flex: 1,
+                    height: '42px',
+                    fontSize: '12.5px',
+                    fontWeight: 700,
+                    borderRadius: '8px',
+                    justifyContent: 'center'
+                  }}
+                >
+                  Descartar
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* 🔍 MODAL FLOTANTE DE CONSULTA 360° */}
         {lookupResult && (
           <div
@@ -1353,7 +1649,7 @@ export default function MobileScannerModal({
         )}
 
         {/* Estado cámara apagada */}
-        {!isScanning && !pendingScan && (
+        {!isScanning && !pendingConfirmation && (
           <div style={{ textAlign: 'center', padding: '24px 16px', color: '#94a3b8' }}>
             {cameraError ? (
               <>
