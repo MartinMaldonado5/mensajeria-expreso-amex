@@ -1,8 +1,8 @@
 // Definiciones de tipos en español para AMEX Courier ERP
 
-export type TipoUbicacion = 'TibCourierMiami' | 'TibCourierTingoMaria' | 'AmexLince' | 'Entregado';
+export type TipoUbicacion = 'TibCourierMiami' | 'TibCourierTingoMaria' | 'TibTingoMaria' | 'AmexLince' | 'Entregado';
 export type TipoMetodoEntrega = 'RecojoLince' | 'CarroAmexDomicilio' | 'AgenciaProvincia';
-export type TipoEstadoEntrega = 'EnAlmacen' | 'EnRutaCarroAmex' | 'EntregadoDomicilio' | 'RecogidoAlmacen';
+export type TipoEstadoEntrega = 'EnAlmacen' | 'EnRutaCarroAmex' | 'EntregadoDomicilio' | 'RecogidoAlmacen' | 'Entregado';
 export type TipoMonedaPago = 'PEN' | 'USD';
 
 export interface Cliente {
@@ -38,6 +38,9 @@ export interface Paquete {
   pesoKg: number;
   valorDeclaradoUsd: number;
   ubicacionActual: TipoUbicacion;
+  anaquel?: 'A1' | 'A2' | 'RECEPCION' | 'DESPACHO' | string;
+  piso?: 'P1' | 'P2' | 'P3' | string;
+  posicionEstante?: string;          // Ej: A1-P1, A1-P2, A1-P3, A2-P1, A2-P2, A2-P3
   metodoEntrega: TipoMetodoEntrega;
   estadoEntrega: TipoEstadoEntrega;
   facturaPdfUrl?: string;

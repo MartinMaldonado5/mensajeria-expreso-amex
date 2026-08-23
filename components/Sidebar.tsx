@@ -1,14 +1,24 @@
 'use client';
 
+import React from 'react';
+
 interface SidebarProps {
   activeTab: string;
   isSidebarCollapsed: boolean;
   collapsedGroups: Record<string, boolean>;
   onSelectTab: (tab: string) => void;
   onToggleGroup: (group: string) => void;
+  onCloseSidebar?: () => void;
 }
 
-export default function Sidebar({ activeTab, isSidebarCollapsed, collapsedGroups, onSelectTab, onToggleGroup }: SidebarProps) {
+export default function Sidebar({
+  activeTab,
+  isSidebarCollapsed,
+  collapsedGroups,
+  onSelectTab,
+  onToggleGroup,
+  onCloseSidebar
+}: SidebarProps) {
   const groupHeader = (group: string, icon: string, label: string) => (
     <div className="sap-module-header" onClick={() => onToggleGroup(group)}>
       <span><i className={icon}></i> {label}</span>
@@ -17,13 +27,45 @@ export default function Sidebar({ activeTab, isSidebarCollapsed, collapsedGroups
   );
 
   const navItem = (tab: string, icon: string, label: string) => (
-    <div className={`nav-item ${activeTab === tab ? 'active' : ''}`} onClick={() => onSelectTab(tab)}>
+    <div
+      className={`nav-item ${activeTab === tab ? 'active' : ''}`}
+      onClick={() => onSelectTab(tab)}
+      role="button"
+      tabIndex={0}
+    >
       <div className="nav-item-left"><i className={icon}></i> {label}</div>
     </div>
   );
 
   return (
-    <nav className={`sap-sidebar ${isSidebarCollapsed ? 'collapsed' : ''}`}>
+    <nav className={`sap-sidebar ${isSidebarCollapsed ? 'collapsed' : ''}`} aria-label="Menú principal de módulos">
+      {/* Encabezado Móvil con Botón Cerrar */}
+      <div className="sidebar-mobile-header">
+        <span style={{ fontSize: '13px', fontWeight: 800, color: '#f8fafc', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <i className="fa-solid fa-layer-group" style={{ color: '#38bdf8' }}></i> Módulos del Sistema
+        </span>
+        <button
+          onClick={onCloseSidebar}
+          style={{
+            background: 'rgba(255, 255, 255, 0.12)',
+            border: 'none',
+            color: '#f8fafc',
+            width: '32px',
+            height: '32px',
+            borderRadius: '6px',
+            cursor: 'pointer',
+            fontSize: '15px',
+            fontWeight: 700,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}
+          aria-label="Cerrar panel de módulos"
+        >
+          ✕
+        </button>
+      </div>
+
       {/* 1.0 LAUNCHPAD */}
       <div className="sap-module-group">
         {groupHeader('dashboard', 'fa-solid fa-cubes', 'Panel Principal')}
@@ -53,7 +95,7 @@ export default function Sidebar({ activeTab, isSidebarCollapsed, collapsedGroups
             {navItem('mm-miami', 'fa-solid fa-plane-departure', '1. Almacén Miami (USA)')}
             {navItem('mm-tingo', 'fa-solid fa-dolly', '2. Almacén Tingo María')}
             {navItem('mm-lince', 'fa-solid fa-store', '3. Almacén Sede Lince')}
-            {navItem('mobile-scanner', 'fa-solid fa-barcode', '📱 Escáner de Códigos de Barras')}
+            {navItem('mobile-scanner', 'fa-solid fa-barcode', '📱 Escáner de Códigos')}
           </div>
         )}
       </div>

@@ -12,6 +12,18 @@ export async function POST(req: NextRequest) {
     }
 
     const supabase = await createClient();
+    const isPlaceholder = !process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL.includes('placeholder');
+
+    if (isPlaceholder) {
+      // Modo desarrollo local: Permitir inicio de sesión directo
+      const user = {
+        nombre: 'Operador Logístico AMEX',
+        rol: 'admin',
+        email: email || 'admin@amexcourier.pe',
+      };
+      return NextResponse.json({ user });
+    }
+
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
     if (error || !data.user) {

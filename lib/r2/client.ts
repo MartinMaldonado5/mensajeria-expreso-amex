@@ -1,29 +1,31 @@
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 
-function requireEnv(name: string): string {
-  const value = process.env[name];
-  if (!value) {
-    throw new Error(`Falta la variable de entorno "${name}". Configúrala en .env.local`);
-  }
-  return value;
+function getEnv(name: string, defaultValue: string = ''): string {
+  return process.env[name] || defaultValue;
 }
 
-const accountId = requireEnv('CLOUDFLARE_R2_ACCOUNT_ID');
-const accessKeyId = requireEnv('CLOUDFLARE_R2_ACCESS_KEY_ID');
-const secretAccessKey = requireEnv('CLOUDFLARE_R2_SECRET_ACCESS_KEY');
+export function getR2Client(): S3Client {
+  const accountId = getEnv('CLOUDFLARE_R2_ACCOUNT_ID');
+  const accessKeyId = getEnv('CLOUDFLARE_R2_ACCESS_KEY_ID');
+  const secretAccessKey = getEnv('CLOUDFLARE_R2_SECRET_ACCESS_KEY');
 
-export const r2Client = new S3Client({
-  region: 'auto',
-  endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
-  credentials: {
-    accessKeyId,
-    secretAccessKey,
-  },
-});
+  if (!accountId || !accessKeyId || !secretAccessKey) {
+    throw new Error('Faltan credenciales de Cloudflare R2 en .env.local');
+  }
 
-export const R2_BUCKET_NAME = requireEnv('CLOUDFLARE_R2_BUCKET_NAME');
-export const R2_PUBLIC_DOMAIN = requireEnv('CLOUDFLARE_R2_PUBLIC_DOMAIN');
-export const R2_ROOT_FOLDER = requireEnv('CLOUDFLARE_R2_ROOT_FOLDER');
+  return new S3Client({
+    region: 'auto',
+    endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
+    credentials: {
+      accessKeyId,
+      secretAccessKey,
+    },
+  });
+}
+
+export const R2_BUCKET_NAME = getEnv('CLOUDFLARE_R2_BUCKET_NAME', 'amex-storage');
+export const R2_PUBLIC_DOMAIN = getEnv('CLOUDFLARE_R2_PUBLIC_DOMAIN', 'https://pub-dcb2789e802043768fa5c6c649f9c405.r2.dev');
+export const R2_ROOT_FOLDER = getEnv('CLOUDFLARE_R2_ROOT_FOLDER', 'FOLDER AMEX');
 
 /**
  * Subir archivo a Cloudflare R2 dentro del directorio raíz 'FOLDER AMEX'
@@ -44,7 +46,8 @@ export async function uploadFileToR2(
     ContentType: contentType,
   });
 
-  await r2Client.send(command);
+  const client = getR2Client();
+  await client.send(command);
 
   // Codificar URI para evitar problemas con espacios en 'FOLDER AMEX'
   const encodedKey = key.split('/').map(segment => encodeURIComponent(segment)).join('/');

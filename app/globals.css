@@ -49,7 +49,7 @@ body {
   justify-content: space-between;
   padding: 0 24px;
   box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-  z-index: 100;
+  z-index: 600;
   border-bottom: 2px solid var(--sap-primary);
 }
 
@@ -737,23 +737,147 @@ tr:hover { background: #f8fafc !important; }
   .table-responsive {
     -webkit-overflow-scrolling: touch;
   }
+  .sidebar-mobile-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 6px 14px 6px;
+    margin-bottom: 8px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  }
   .sap-sidebar {
     position: fixed;
     top: 52px;
-    bottom: 0;
+    bottom: 64px;
     left: 0;
-    z-index: 500;
-    box-shadow: 10px 0 25px rgba(0,0,0,0.5);
+    width: 290px;
+    max-width: 82vw;
+    z-index: 700;
+    box-shadow: 12px 0 35px rgba(0,0,0,0.65);
+    transform: translateX(0);
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.22s;
   }
   .sap-sidebar.collapsed {
-    transform: translateX(-100%);
-    width: 280px;
-    opacity: 0;
-    pointer-events: none;
+    transform: translateX(-105%) !important;
+    width: 290px !important;
+    opacity: 0 !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+  }
+  .header-logout-text {
+    display: none;
   }
 }
 
-/* Fix Escáner Cámara Vídeo 100% Cobertura Sin Franjas Negras */
+/* Sidebar Backdrop (Solo visible en móviles cuando el drawer está expandido) */
+.sidebar-backdrop {
+  display: none !important;
+}
+
+/* Mobile Bottom Navigation Bar */
+.mobile-bottom-nav {
+  display: none;
+}
+
+.sidebar-mobile-header {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  body {
+    padding-bottom: 64px;
+  }
+  .main-content {
+    padding: 14px 12px 80px 12px;
+  }
+  .sidebar-backdrop {
+    display: block !important;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.65);
+    backdrop-filter: blur(2px);
+    z-index: 650;
+  }
+  .mobile-bottom-nav {
+    display: flex;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 64px;
+    background: #0f172a;
+    border-top: 1px solid #1e293b;
+    z-index: 800; /* Siempre por encima del backdrop (650) y del sidebar (700) */
+    align-items: center;
+    justify-content: space-around;
+    padding: 0 4px;
+    box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.35);
+  }
+  .mobile-nav-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    color: #94a3b8;
+    font-size: 10px;
+    font-weight: 700;
+    gap: 3px;
+    cursor: pointer;
+    padding: 6px 8px;
+    border-radius: 8px;
+    transition: all 0.15s ease;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .mobile-nav-btn.active {
+    color: #38bdf8;
+  }
+  .mobile-nav-scanner-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    color: #94a3b8;
+    font-size: 10.5px;
+    font-weight: 800;
+    cursor: pointer;
+    margin-top: -18px;
+    transition: all 0.15s ease;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .mobile-nav-scanner-btn .scanner-circle {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: #2563eb;
+    color: #ffffff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 14px rgba(37, 99, 235, 0.5);
+    border: 3px solid #0f172a;
+    margin-bottom: 2px;
+    transition: transform 0.15s ease;
+  }
+  .mobile-nav-scanner-btn.active .scanner-circle {
+    background: #22c55e;
+    box-shadow: 0 4px 16px rgba(34, 197, 94, 0.6);
+    transform: scale(1.08);
+  }
+  .mobile-nav-scanner-btn.active {
+    color: #22c55e;
+  }
+}
+
+/* Fix Escáner Cámara Vídeo 100% Cobertura */
 #qr-reader-viewport {
   width: 100% !important;
   height: 100% !important;
@@ -770,3 +894,4 @@ tr:hover { background: #f8fafc !important; }
   object-fit: cover !important;
   border-radius: 8px !important;
 }
+

@@ -45,3 +45,4 @@ desktop.ini
 # Environment / Secrets
 .env*
 !.env.example
+certificates/

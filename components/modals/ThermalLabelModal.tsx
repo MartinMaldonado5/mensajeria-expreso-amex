@@ -29,10 +29,16 @@ export default function ThermalLabelModal({ pkg, onClose }: ThermalLabelModalPro
               <div style={{ fontWeight: 800, fontSize: '15px' }}>{pkg.nombreConsignatario || 'María Torres Pérez'}</div>
               <div>DNI: {pkg.dniConsignatario || '72819204'}</div>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', borderTop: '1px solid #ccc', paddingTop: '8px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px', borderTop: '1px solid #ccc', paddingTop: '8px' }}>
               <div>
                 <strong>WR RECIBO:</strong>
                 <div className="cell-mono" style={{ fontWeight: 800, fontSize: '14px' }}>{pkg.numeroReciboBodega}</div>
+              </div>
+              <div>
+                <strong>UBICACIÓN:</strong>
+                <div style={{ fontWeight: 900, fontSize: '14px', color: '#000', background: '#e2e8f0', padding: '2px 6px', borderRadius: '4px', textAlign: 'center' }}>
+                  {pkg.posicionEstante || (pkg.anaquel ? `${pkg.anaquel}-${pkg.piso || 'P1'}` : 'A1-P1')}
+                </div>
               </div>
               <div>
                 <strong>PESO:</strong>

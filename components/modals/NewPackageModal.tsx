@@ -14,6 +14,9 @@ export interface NewPkgFormData {
   pesoKg: string;
   valorDeclaradoUsd: string;
   ubicacionActual: string;
+  anaquel?: string;
+  piso?: string;
+  posicionEstante?: string;
   metodoEntrega: string;
   facturaPdfUrl: string;
 }
@@ -130,6 +133,51 @@ export default function NewPackageModal({ form, clientes, onChange, onSave, onCl
                       <input type="number" step="0.01" min="0" required className="pkg-input pkg-input--mono" value={form.valorDeclaradoUsd} onChange={e => set('valorDeclaradoUsd', e.target.value)} placeholder="150.00" />
                     </div>
                   </div>
+                  <div className="pkg-grid">
+                    <div className="pkg-field">
+                      <label className="pkg-label">Anaquel (Estante Físico)</label>
+                      <select
+                        className="pkg-select"
+                        value={form.anaquel || 'A1'}
+                        onChange={e => {
+                          const ana = e.target.value;
+                          const pis = form.piso || 'P1';
+                          onChange({
+                            ...form,
+                            anaquel: ana,
+                            piso: pis,
+                            posicionEstante: `${ana}-${pis}`
+                          });
+                        }}
+                      >
+                        <option value="A1">Anaquel 1 (A1)</option>
+                        <option value="A2">Anaquel 2 (A2)</option>
+                        <option value="REC">Mesa Recepción (REC)</option>
+                        <option value="DSP">Zona Despacho (DSP)</option>
+                      </select>
+                    </div>
+                    <div className="pkg-field">
+                      <label className="pkg-label">Piso / Nivel</label>
+                      <select
+                        className="pkg-select"
+                        value={form.piso || 'P1'}
+                        onChange={e => {
+                          const pis = e.target.value;
+                          const ana = form.anaquel || 'A1';
+                          onChange({
+                            ...form,
+                            piso: pis,
+                            anaquel: ana,
+                            posicionEstante: `${ana}-${pis}`
+                          });
+                        }}
+                      >
+                        <option value="P1">Piso 1 (Inferior / Pesado)</option>
+                        <option value="P2">Piso 2 (Medio / Estándar)</option>
+                        <option value="P3">Piso 3 (Superior / Ligero)</option>
+                      </select>
+                    </div>
+                  </div>
                   <div className="pkg-field">
                     <label className="pkg-label">Método de entrega en Perú</label>
                     <select className="pkg-select" value={form.metodoEntrega} onChange={e => set('metodoEntrega', e.target.value)}>
@@ -169,6 +217,12 @@ export default function NewPackageModal({ form, clientes, onChange, onSave, onCl
                     <div className="pkg-receipt__row">
                       <span className="pkg-receipt__k">Empaque</span>
                       <span className="pkg-receipt__v">{form.tipoEmpaque}</span>
+                    </div>
+                    <div className="pkg-receipt__row">
+                      <span className="pkg-receipt__k">Estante / Piso</span>
+                      <span className="pkg-receipt__v" style={{ fontWeight: 800, color: '#2563eb' }}>
+                        {form.posicionEstante || `${form.anaquel || 'A1'}-${form.piso || 'P1'}`}
+                      </span>
                     </div>
                     <div className="pkg-receipt__row">
                       <span className="pkg-receipt__k">Peso</span>

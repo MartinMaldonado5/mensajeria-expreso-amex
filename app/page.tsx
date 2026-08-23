@@ -5,6 +5,7 @@ import { Paquete, Cliente, TipoUbicacion, TipoMetodoEntrega, TipoEstadoEntrega }
 import { supabase } from '@/lib/supabase/client';
 import HeaderBar from '@/components/HeaderBar';
 import Sidebar from '@/components/Sidebar';
+import MobileBottomNav from '@/components/MobileBottomNav';
 import DashboardTab from '@/components/tabs/DashboardTab';
 import CustomersTab from '@/components/tabs/CustomersTab';
 import DniTab from '@/components/tabs/DniTab';
@@ -57,11 +58,16 @@ const INITIAL_CLIENTES: Cliente[] = Array.from({ length: 105 }, (_, i) => {
   };
 });
 
+const SHELF_SAMPLE_POSITIONS = ['A1-P1', 'A1-P2', 'A1-P3', 'A2-P1', 'A2-P2', 'A2-P3', 'REC'];
+
 const INITIAL_PAQUETES: Paquete[] = Array.from({ length: 105 }, (_, i) => {
   const idx = i + 1;
   const cli = INITIAL_CLIENTES[i];
   const ubicacion = i % 3 === 0 ? 'TibCourierMiami' : (i % 3 === 1 ? 'TibTingoMaria' : 'AmexLince');
   const estado = i % 2 === 0 ? 'EnAlmacen' : 'EnRutaCarroAmex';
+  const pos = SHELF_SAMPLE_POSITIONS[i % SHELF_SAMPLE_POSITIONS.length];
+  const [ana, pis] = pos.includes('-') ? pos.split('-') : [pos, 'P1'];
+
   return {
     id: `p-${idx}`,
     codigoCasillero: cli.codigoCasillero,
@@ -75,6 +81,9 @@ const INITIAL_PAQUETES: Paquete[] = Array.from({ length: 105 }, (_, i) => {
     pesoKg: Number((0.5 + (idx % 10) * 0.9).toFixed(1)),
     valorDeclaradoUsd: Number((25.0 + (idx % 15) * 11.5).toFixed(2)),
     ubicacionActual: ubicacion as TipoUbicacion,
+    anaquel: ana,
+    piso: pis,
+    posicionEstante: pos,
     metodoEntrega: cli.transportistaPreferido === 'CARRO AMEX' ? 'CarroAmexDomicilio' : 'AgenciaProvincia',
     estadoEntrega: estado as TipoEstadoEntrega,
     facturaPdfUrl: ORDER_PDF_URL,
@@ -107,6 +116,9 @@ const EMPTY_PKG_FORM: NewPkgFormData = {
   pesoKg: '1.0',
   valorDeclaradoUsd: '50.0',
   ubicacionActual: 'TibCourierMiami',
+  anaquel: 'A1',
+  piso: 'P1',
+  posicionEstante: 'A1-P1',
   metodoEntrega: 'CarroAmexDomicilio',
   facturaPdfUrl: ''
 };
@@ -115,12 +127,19 @@ export default function DashboardPage() {
   const [activeTab, setActiveTabState] = useState<string>('dashboard');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setIsSidebarCollapsed(window.innerWidth <= 768);
+    }
+  }, []);
+
   const setActiveTab = useCallback((tab: string) => {
     setActiveTabState(tab);
     if (typeof window !== 'undefined' && window.innerWidth <= 768) {
       setIsSidebarCollapsed(true);
     }
   }, []);
+
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({
     clientes: false,
     almacenes: false,
@@ -129,66 +148,19 @@ export default function DashboardPage() {
     configuracion: false
   });
 
-  // Auth States
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [loginUser, setLoginUser] = useState({ email: '', password: '' });
-  const [loginError, setLoginError] = useState<string | null>(null);
-  const [currentUser, setCurrentUser] = useState<{ nombre: string; rol: string } | null>(null);
+  // Estado de usuario activo directo
+  const [currentUser, setCurrentUser] = useState<{ nombre: string; rol: string } | null>({
+    nombre: 'Operador Logístico AMEX',
+    rol: 'admin'
+  });
 
-  useEffect(() => {
-    async function restoreSession() {
-      try {
-        const res = await fetch('/api/auth/me');
-        if (res.ok) {
-          const { user } = await res.json();
-          if (user) {
-            setCurrentUser(user);
-            setIsLoggedIn(true);
-          }
-        }
-      } catch {
-        // Sesión no restaurable
-      }
-    }
-    restoreSession();
-  }, []);
-
-  const handleLoginSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoginError(null);
-
-    try {
-      const res = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: loginUser.email, password: loginUser.password }),
-      });
-
-      const data = await res.json();
-      if (res.ok && data.user) {
-        setCurrentUser(data.user);
-        setIsLoggedIn(true);
-      } else {
-        setLoginError(data.error || 'Credenciales incorrectas. Verifique su correo y contraseña.');
-      }
-    } catch {
-      setLoginError('Error de conexión. Intente nuevamente.');
-    }
-  };
-
-  const handleLogout = async () => {
-    try {
-      await fetch('/api/auth/logout', { method: 'POST' });
-    } catch {
-      // La sesión se limpia igualmente en el cliente
-    }
-    setIsLoggedIn(false);
-    setCurrentUser(null);
+  const handleLogout = () => {
+    setCurrentUser({ nombre: 'Operador Logístico AMEX', rol: 'admin' });
   };
 
   const [clientes, setClientes] = useState<Cliente[]>(INITIAL_CLIENTES);
   const [paquetes, setPaquetes] = useState<Paquete[]>(INITIAL_PAQUETES);
-  const [scannedLogs, setScannedLogs] = useState<{ code: string; format: string; time: string }[]>([]);
+  const [scannedLogs, setScannedLogs] = useState<{ code: string; format: string; time: string; location?: string }[]>([]);
   const [selectedPdfUrl, setSelectedPdfUrl] = useState<string | null>(null);
   const [selectedDniImage, setSelectedDniImage] = useState<{ url: string; titulo: string; subtitulo: string } | null>(null);
   const [selectedThermalPkg, setSelectedThermalPkg] = useState<Paquete | null>(null);
@@ -229,24 +201,31 @@ export default function DashboardPage() {
 
         const dbPaquetes = paquetesRes.data;
         if (dbPaquetes && dbPaquetes.length > 0) {
-          setPaquetes(dbPaquetes.map(p => ({
-            id: p.id,
-            codigoCasillero: p.codigo_casillero,
-            numeroReciboBodega: p.numero_recibo_bodega,
-            trackingUsa: p.tracking_usa,
-            tipoEmpaque: p.tipo_empaque || 'CAJA',
-            numeroFactura: p.numero_factura || '',
-            dniConsignatario: p.dni_consignatario || '',
-            nombreConsignatario: p.nombre_consignatario || '',
-            descripcion: p.descripcion || '',
-            pesoKg: Number(p.peso_kg || 0),
-            valorDeclaradoUsd: Number(p.valor_declarado_usd || 0),
-            ubicacionActual: (p.ubicacion_actual as TipoUbicacion) || 'TibCourierMiami',
-            metodoEntrega: (p.metodo_entrega as TipoMetodoEntrega) || 'CarroAmexDomicilio',
-            estadoEntrega: (p.estado_entrega as TipoEstadoEntrega) || 'EnAlmacen',
-            facturaPdfUrl: p.factura_pdf_url || '',
-            creadoEn: p.creado_en || ''
-          })));
+          setPaquetes(dbPaquetes.map(p => {
+            const pos = p.posicion_estante || (p.anaquel && p.piso ? `${p.anaquel}-${p.piso}` : 'REC');
+            const [ana, pis] = pos.includes('-') ? pos.split('-') : [pos, 'P1'];
+            return {
+              id: p.id,
+              codigoCasillero: p.codigo_casillero,
+              numeroReciboBodega: p.numero_recibo_bodega,
+              trackingUsa: p.tracking_usa,
+              tipoEmpaque: p.tipo_empaque || 'CAJA',
+              numeroFactura: p.numero_factura || '',
+              dniConsignatario: p.dni_consignatario || '',
+              nombreConsignatario: p.nombre_consignatario || '',
+              descripcion: p.descripcion || '',
+              pesoKg: Number(p.peso_kg || 0),
+              valorDeclaradoUsd: Number(p.valor_declarado_usd || 0),
+              ubicacionActual: (p.ubicacion_actual as TipoUbicacion) || 'TibCourierMiami',
+              anaquel: p.anaquel || ana,
+              piso: p.piso || pis,
+              posicionEstante: pos,
+              metodoEntrega: (p.metodo_entrega as TipoMetodoEntrega) || 'CarroAmexDomicilio',
+              estadoEntrega: (p.estado_entrega as TipoEstadoEntrega) || 'EnAlmacen',
+              facturaPdfUrl: p.factura_pdf_url || '',
+              creadoEn: p.creado_en || ''
+            };
+          }));
         }
       } catch {
         console.log('Supabase sync active.');
@@ -258,6 +237,44 @@ export default function DashboardPage() {
   const toggleModuleGroup = (groupKey: string) => {
     setCollapsedGroups(prev => ({ ...prev, [groupKey]: !prev[groupKey] }));
   };
+
+  // 📍 Asignación de Ubicación Física a Paquete (Slotting WMS)
+  const handleAssignPackageLocation = useCallback((code: string, location: string) => {
+    const upper = code.trim().toUpperCase();
+    const [ana, pis] = location.includes('-') ? location.split('-') : [location, 'P1'];
+
+    setPaquetes(prev =>
+      prev.map(p => {
+        if (
+          p.numeroReciboBodega.toUpperCase() === upper ||
+          p.trackingUsa.toUpperCase() === upper ||
+          p.codigoCasillero.toUpperCase() === upper
+        ) {
+          return {
+            ...p,
+            anaquel: ana,
+            piso: pis,
+            posicionEstante: location
+          };
+        }
+        return p;
+      })
+    );
+
+    try {
+      supabase
+        .from('paquetes')
+        .update({
+          anaquel: ana,
+          piso: pis,
+          posicion_estante: location
+        })
+        .or(`numero_recibo_bodega.eq.${code},tracking_usa.eq.${code},codigo_casillero.eq.${code}`)
+        .then(() => {});
+    } catch {
+      // Silent
+    }
+  }, []);
 
   const handleSaveClient = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -292,6 +309,9 @@ export default function DashboardPage() {
 
   const handleSavePackage = async (e: React.FormEvent) => {
     e.preventDefault();
+    const pos = newPkgForm.posicionEstante || `${newPkgForm.anaquel || 'A1'}-${newPkgForm.piso || 'P1'}`;
+    const [ana, pis] = pos.includes('-') ? pos.split('-') : [pos, 'P1'];
+
     const newPkg: Paquete = {
       id: `p-${Date.now()}`,
       codigoCasillero: newPkgForm.codigoCasillero,
@@ -305,6 +325,9 @@ export default function DashboardPage() {
       pesoKg: Number(newPkgForm.pesoKg),
       valorDeclaradoUsd: Number(newPkgForm.valorDeclaradoUsd),
       ubicacionActual: newPkgForm.ubicacionActual as TipoUbicacion,
+      anaquel: ana,
+      piso: pis,
+      posicionEstante: pos,
       metodoEntrega: newPkgForm.metodoEntrega as TipoMetodoEntrega,
       estadoEntrega: 'EnAlmacen' as TipoEstadoEntrega,
       facturaPdfUrl: newPkgForm.facturaPdfUrl,
@@ -326,6 +349,9 @@ export default function DashboardPage() {
         peso_kg: newPkgForm.pesoKg,
         valor_declarado_usd: newPkgForm.valorDeclaradoUsd,
         ubicacion_actual: newPkgForm.ubicacionActual,
+        anaquel: ana,
+        piso: pis,
+        posicion_estante: pos,
         metodo_entrega: newPkgForm.metodoEntrega,
         factura_pdf_url: newPkgForm.facturaPdfUrl
       });
@@ -342,68 +368,9 @@ export default function DashboardPage() {
     setIsNewPkgModalOpen(true);
   };
 
-  const handleScanCode = (code: string, format: string) => {
-    setScannedLogs(prev => [{ code, format, time: new Date().toLocaleTimeString() }, ...prev]);
+  const handleScanCode = (code: string, format: string, extra?: { mode: string; location?: string }) => {
+    setScannedLogs(prev => [{ code, format, location: extra?.location, time: new Date().toLocaleTimeString() }, ...prev]);
   };
-
-  if (!isLoggedIn) {
-    return (
-      <div style={{ position: 'fixed', inset: 0, backgroundColor: '#0f172a', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', zIndex: 9999 }}>
-        <div style={{ backgroundColor: '#ffffff', width: '100%', maxWidth: '420px', borderRadius: '16px', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)', overflow: 'hidden', border: '1px solid #e2e8f0' }}>
-          {/* Brand Header */}
-          <div style={{ backgroundColor: '#020617', padding: '28px 24px', textAlign: 'center', borderBottom: '2px solid #2563eb' }}>
-            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
-              <span className="sap-logo-badge" style={{ fontSize: '14px', padding: '6px 12px' }}>ERP</span>
-              <h2 style={{ color: '#ffffff', fontSize: '20px', fontWeight: 800, margin: 0 }}>AMEX COURIER</h2>
-            </div>
-            <p style={{ color: '#94a3b8', fontSize: '13px', margin: 0 }}>Sistema Logístico Integrado de Casilleros</p>
-          </div>
-
-          {/* Form Body */}
-          <form onSubmit={handleLoginSubmit} style={{ padding: '28px 24px' }}>
-            <h3 style={{ fontSize: '16px', fontWeight: 800, color: '#0f172a', marginBottom: '18px', textAlign: 'center' }}>Iniciar Sesión en el Sistema</h3>
-
-            {loginError && (
-              <div style={{ backgroundColor: '#fee2e2', border: '1px solid #f87171', color: '#dc2626', padding: '10px 14px', borderRadius: '8px', fontSize: '12.5px', marginBottom: '16px', fontWeight: 600 }}>
-                {loginError}
-              </div>
-            )}
-
-            <div style={{ marginBottom: '16px' }}>
-              <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#475569', marginBottom: '6px', textTransform: 'uppercase' }}>Correo Electrónico</label>
-              <input
-                type="email"
-                required
-                value={loginUser.email}
-                onChange={e => setLoginUser({ ...loginUser, email: e.target.value })}
-                style={{ width: '100%', height: '44px', padding: '0 14px', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '14px', fontWeight: 600, outline: 'none' }}
-                placeholder="admin@amexcourier.pe"
-              />
-            </div>
-
-            <div style={{ marginBottom: '20px' }}>
-              <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#475569', marginBottom: '6px', textTransform: 'uppercase' }}>Contraseña</label>
-              <input
-                type="password"
-                required
-                value={loginUser.password}
-                onChange={e => setLoginUser({ ...loginUser, password: e.target.value })}
-                style={{ width: '100%', height: '44px', padding: '0 14px', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '14px', fontWeight: 600, outline: 'none' }}
-                placeholder="••••••••"
-              />
-            </div>
-
-            <button
-              type="submit"
-              style={{ width: '100%', height: '46px', backgroundColor: '#2563eb', color: '#ffffff', border: 'none', borderRadius: '10px', fontSize: '14px', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', boxShadow: '0 4px 12px rgba(37, 99, 235, 0.3)' }}
-            >
-              <i className="fa-solid fa-right-to-bracket"></i> Ingresar al Sistema ERP
-            </button>
-          </form>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', width: '100vw', overflow: 'hidden' }}>
@@ -421,6 +388,7 @@ export default function DashboardPage() {
           collapsedGroups={collapsedGroups}
           onSelectTab={setActiveTab}
           onToggleGroup={toggleModuleGroup}
+          onCloseSidebar={() => setIsSidebarCollapsed(true)}
         />
 
         <main className="main-content">
@@ -455,6 +423,46 @@ export default function DashboardPage() {
           {activeTab === 'mm-miami' && (
             <MiamiTab
               paquetes={paquetes}
+              location="TibCourierMiami"
+              title="1. Almacén Tib Courier (Miami, USA)"
+              subtitle="Ingesta de compras con Guía WR#, Tipo Empaque e Invoices PDF en Cloudflare R2"
+              breadcrumb="Almacén Miami (USA)"
+              onNewPackage={openNewPkgModal}
+              onViewPdf={setSelectedPdfUrl}
+            />
+          )}
+
+          {activeTab === 'mm-tingo' && (
+            <MiamiTab
+              paquetes={paquetes}
+              location="TibTingoMaria"
+              title="2. Almacén Regional (Tingo María)"
+              subtitle="Control de sacas y paquetes en tránsito regional Tingo María"
+              breadcrumb="Almacén Tingo María"
+              onNewPackage={openNewPkgModal}
+              onViewPdf={setSelectedPdfUrl}
+            />
+          )}
+
+          {activeTab === 'mm-lince' && (
+            <MiamiTab
+              paquetes={paquetes}
+              location="AmexLince"
+              title="3. Almacén Central Sede Lince (Lima)"
+              subtitle="Recepción, clasificación y despacho final en Sede Central Lince"
+              breadcrumb="Almacén Central Lince"
+              onNewPackage={openNewPkgModal}
+              onViewPdf={setSelectedPdfUrl}
+            />
+          )}
+
+          {activeTab === 'shp-deliveries' && (
+            <MiamiTab
+              paquetes={paquetes}
+              location="deliveries"
+              title="4. Despacho y Reparto (Carro Amex)"
+              subtitle="Rutas de entrega a domicilio y traslados a agencias Olva / Shalom"
+              breadcrumb="Despacho & Reparto"
               onNewPackage={openNewPkgModal}
               onViewPdf={setSelectedPdfUrl}
             />
@@ -467,11 +475,30 @@ export default function DashboardPage() {
           {activeTab === 'mobile-scanner' && (
             <ScannerTab
               scannedLogs={scannedLogs}
-onConfirm={handleScanCode}
+              paquetes={paquetes}
+              clientes={clientes}
+              onConfirm={handleScanCode}
+              onSlotPackage={handleAssignPackageLocation}
             />
           )}
         </main>
       </div>
+
+      {/* Backdrop para cerrar el menú lateral en móviles */}
+      {!isSidebarCollapsed && (
+        <div
+          className="sidebar-backdrop"
+          onClick={() => setIsSidebarCollapsed(true)}
+        />
+      )}
+
+      {/* Barra de Navegación Rápida Móvil (Inferior) */}
+      <MobileBottomNav
+        activeTab={activeTab}
+        isSidebarOpen={!isSidebarCollapsed}
+        onSelectTab={setActiveTab}
+        onToggleSidebar={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+      />
 
       {isNewClientModalOpen && (
         <NewClientModal
