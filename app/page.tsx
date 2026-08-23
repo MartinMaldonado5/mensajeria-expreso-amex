@@ -174,8 +174,8 @@ export default function DashboardPage() {
     async function fetchSupabaseData() {
       try {
         const [clientesRes, paquetesRes] = await Promise.all([
-          supabase.from('clientes').select('*'),
-          supabase.from('paquetes').select('*'),
+          supabase.from('clientes').select('*').order('creado_en', { ascending: false }),
+          supabase.from('paquetes').select('*').order('creado_en', { ascending: false }),
         ]);
 
         const dbClientes = clientesRes.data;
@@ -227,19 +227,129 @@ export default function DashboardPage() {
             };
           }));
         }
-      } catch {
-        console.log('Supabase sync active.');
+      } catch (err) {
+        console.warn('Supabase initial fetch sync:', err);
       }
     }
+
     fetchSupabaseData();
+
+    // ⚡ CANALES REALTIME WEBSOCKET (Supabase Realtime)
+    const realtimeChannel = supabase
+      .channel('amex-erp-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'paquetes' }, payload => {
+        if (payload.eventType === 'INSERT') {
+          const p = payload.new as Record<string, unknown>;
+          const pos = (p.posicion_estante as string) || (p.anaquel && p.piso ? `${p.anaquel}-${p.piso}` : 'REC');
+          const [ana, pis] = pos.includes('-') ? pos.split('-') : [pos, 'P1'];
+          setPaquetes(prev => {
+            if (prev.some(x => x.id === p.id || x.numeroReciboBodega === p.numero_recibo_bodega)) return prev;
+            return [{
+              id: String(p.id),
+              codigoCasillero: String(p.codigo_casillero),
+              numeroReciboBodega: String(p.numero_recibo_bodega),
+              trackingUsa: String(p.tracking_usa || ''),
+              tipoEmpaque: String(p.tipo_empaque || 'CAJA'),
+              numeroFactura: String(p.numero_factura || ''),
+              dniConsignatario: String(p.dni_consignatario || ''),
+              nombreConsignatario: String(p.nombre_consignatario || ''),
+              descripcion: String(p.descripcion || ''),
+              pesoKg: Number(p.peso_kg || 0),
+              valorDeclaradoUsd: Number(p.valor_declarado_usd || 0),
+              ubicacionActual: (p.ubicacion_actual as TipoUbicacion) || 'TibCourierMiami',
+              anaquel: (p.anaquel as string) || ana,
+              piso: (p.piso as string) || pis,
+              posicionEstante: pos,
+              metodoEntrega: (p.metodo_entrega as TipoMetodoEntrega) || 'CarroAmexDomicilio',
+              estadoEntrega: (p.estado_entrega as TipoEstadoEntrega) || 'EnAlmacen',
+              facturaPdfUrl: String(p.factura_pdf_url || ''),
+              creadoEn: String(p.creado_en || '')
+            }, ...prev];
+          });
+        } else if (payload.eventType === 'UPDATE') {
+          const p = payload.new as Record<string, unknown>;
+          const pos = (p.posicion_estante as string) || (p.anaquel && p.piso ? `${p.anaquel}-${p.piso}` : 'REC');
+          const [ana, pis] = pos.includes('-') ? pos.split('-') : [pos, 'P1'];
+          setPaquetes(prev => prev.map(item => item.id === p.id || item.numeroReciboBodega === p.numero_recibo_bodega ? {
+            ...item,
+            codigoCasillero: String(p.codigo_casillero || item.codigoCasillero),
+            numeroReciboBodega: String(p.numero_recibo_bodega || item.numeroReciboBodega),
+            trackingUsa: String(p.tracking_usa || item.trackingUsa),
+            tipoEmpaque: String(p.tipo_empaque || item.tipoEmpaque),
+            descripcion: String(p.descripcion || item.descripcion),
+            pesoKg: Number(p.peso_kg !== undefined ? p.peso_kg : item.pesoKg),
+            valorDeclaradoUsd: Number(p.valor_declarado_usd !== undefined ? p.valor_declarado_usd : item.valorDeclaradoUsd),
+            ubicacionActual: (p.ubicacion_actual as TipoUbicacion) || item.ubicacionActual,
+            anaquel: (p.anaquel as string) || ana,
+            piso: (p.piso as string) || pis,
+            posicionEstante: pos,
+            metodoEntrega: (p.metodo_entrega as TipoMetodoEntrega) || item.metodoEntrega,
+            estadoEntrega: (p.estado_entrega as TipoEstadoEntrega) || item.estadoEntrega,
+            facturaPdfUrl: String(p.factura_pdf_url || item.facturaPdfUrl)
+          } : item));
+        } else if (payload.eventType === 'DELETE') {
+          const oldRecord = payload.old as Record<string, unknown>;
+          setPaquetes(prev => prev.filter(item => item.id !== oldRecord.id));
+        }
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'clientes' }, payload => {
+        if (payload.eventType === 'INSERT') {
+          const c = payload.new as Record<string, unknown>;
+          setClientes(prev => {
+            if (prev.some(x => x.id === c.id || x.codigoCasillero === c.codigo_casillero)) return prev;
+            return [{
+              id: String(c.id),
+              codigoCasillero: String(c.codigo_casillero),
+              nombre: String(c.nombre),
+              documentoIdentidad: String(c.documento_identidad),
+              telefono: String(c.telefono || ''),
+              email: String(c.email || ''),
+              departamento: String(c.departamento || 'LIMA'),
+              provincia: String(c.provincia || 'LIMA'),
+              distrito: String(c.distrito || 'LINCE'),
+              direccionEntrega: String(c.direccion_entrega || ''),
+              transportistaPreferido: String(c.transportista_preferido || 'CARRO AMEX'),
+              agenciaDestino: String(c.agencia_destino || ''),
+              dniFrontalUrl: String(c.dni_frontal_url || ''),
+              dniReversoUrl: String(c.dni_reverso_url || ''),
+              creadoEn: String(c.creado_en || '')
+            }, ...prev];
+          });
+        } else if (payload.eventType === 'UPDATE') {
+          const c = payload.new as Record<string, unknown>;
+          setClientes(prev => prev.map(item => item.id === c.id || item.codigoCasillero === c.codigo_casillero ? {
+            ...item,
+            nombre: String(c.nombre || item.nombre),
+            documentoIdentidad: String(c.documento_identidad || item.documentoIdentidad),
+            telefono: String(c.telefono || item.telefono),
+            email: String(c.email || item.email),
+            departamento: String(c.departamento || item.departamento),
+            provincia: String(c.provincia || item.provincia),
+            distrito: String(c.distrito || item.distrito),
+            direccionEntrega: String(c.direccion_entrega || item.direccionEntrega),
+            transportistaPreferido: String(c.transportista_preferido || item.transportistaPreferido),
+            agenciaDestino: String(c.agencia_destino || item.agenciaDestino),
+            dniFrontalUrl: String(c.dni_frontal_url || item.dniFrontalUrl),
+            dniReversoUrl: String(c.dni_reverso_url || item.dniReversoUrl)
+          } : item));
+        } else if (payload.eventType === 'DELETE') {
+          const oldRecord = payload.old as Record<string, unknown>;
+          setClientes(prev => prev.filter(item => item.id !== oldRecord.id));
+        }
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(realtimeChannel);
+    };
   }, []);
 
   const toggleModuleGroup = (groupKey: string) => {
     setCollapsedGroups(prev => ({ ...prev, [groupKey]: !prev[groupKey] }));
   };
 
-  // 📍 Asignación de Ubicación Física a Paquete (Slotting WMS)
-  const handleAssignPackageLocation = useCallback((code: string, location: string) => {
+  // 📍 Asignación de Ubicación Física a Paquete (Slotting WMS Persistente)
+  const handleAssignPackageLocation = useCallback(async (code: string, location: string) => {
     const upper = code.trim().toUpperCase();
     const [ana, pis] = location.includes('-') ? location.split('-') : [location, 'P1'];
 
@@ -262,17 +372,16 @@ export default function DashboardPage() {
     );
 
     try {
-      supabase
+      await supabase
         .from('paquetes')
         .update({
           anaquel: ana,
           piso: pis,
           posicion_estante: location
         })
-        .or(`numero_recibo_bodega.eq.${code},tracking_usa.eq.${code},codigo_casillero.eq.${code}`)
-        .then(() => {});
-    } catch {
-      // Silent
+        .or(`numero_recibo_bodega.eq.${upper},tracking_usa.eq.${upper},codigo_casillero.eq.${upper}`);
+    } catch (err) {
+      console.warn('Error syncing package location to Supabase:', err);
     }
   }, []);
 
@@ -368,8 +477,19 @@ export default function DashboardPage() {
     setIsNewPkgModalOpen(true);
   };
 
-  const handleScanCode = (code: string, format: string, extra?: { mode: string; location?: string }) => {
+  const handleScanCode = async (code: string, format: string, extra?: { mode: string; location?: string }) => {
     setScannedLogs(prev => [{ code, format, location: extra?.location, time: new Date().toLocaleTimeString() }, ...prev]);
+    try {
+      await supabase.from('escaneos_log').insert({
+        codigo: code,
+        formato: format,
+        modo_workflow: extra?.mode || 'slotting',
+        ubicacion: extra?.location || null,
+        operador: currentUser?.nombre || 'Operador Logístico AMEX'
+      });
+    } catch {
+      // Silent
+    }
   };
 
   return (
