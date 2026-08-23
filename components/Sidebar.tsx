@@ -92,6 +92,7 @@ export default function Sidebar({
         {groupHeader('almacenes', 'fa-solid fa-warehouse', 'Operaciones y Almacenes')}
         {!collapsedGroups.almacenes && (
           <div className="sap-sub-menu">
+            {navItem('mm-inventory', 'fa-solid fa-boxes-stacked', '📦 Inventario & Movimientos WMS')}
             {navItem('mm-miami', 'fa-solid fa-plane-departure', '1. Almacén Miami (USA)')}
             {navItem('mm-tingo', 'fa-solid fa-dolly', '2. Almacén Tingo María')}
             {navItem('mm-lince', 'fa-solid fa-store', '3. Almacén Sede Lince')}

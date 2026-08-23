@@ -12,6 +12,7 @@ import DniTab from '@/components/tabs/DniTab';
 import MiamiTab from '@/components/tabs/MiamiTab';
 import LiquidationsTab from '@/components/tabs/LiquidationsTab';
 import ScannerTab from '@/components/tabs/ScannerTab';
+import InventoryTab from '@/components/tabs/InventoryTab';
 import NewClientModal, { NewClientFormData } from '@/components/modals/NewClientModal';
 import NewPackageModal, { NewPkgFormData } from '@/components/modals/NewPackageModal';
 import ThermalLabelModal from '@/components/modals/ThermalLabelModal';
@@ -492,6 +493,10 @@ export default function DashboardPage() {
     }
   };
 
+  const handleUpdatePackage = (updated: Paquete) => {
+    setPaquetes(prev => prev.map(p => p.id === updated.id ? updated : p));
+  };
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', width: '100vw', overflow: 'hidden' }}>
       <HeaderBar
@@ -538,6 +543,16 @@ export default function DashboardPage() {
 
           {activeTab === 'sd-dni' && (
             <DniTab clientes={clientes} onViewDniImage={setSelectedDniImage} />
+          )}
+
+          {activeTab === 'mm-inventory' && (
+            <InventoryTab
+              paquetes={paquetes}
+              clientes={clientes}
+              onNewPackage={openNewPkgModal}
+              onViewPdf={setSelectedPdfUrl}
+              onUpdatePackage={handleUpdatePackage}
+            />
           )}
 
           {activeTab === 'mm-miami' && (
