@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 import { Paquete, Cliente } from '@/types';
+import { supabase } from '@/lib/supabase/client';
 
 interface BarcodeBoundingBox {
   x: number;
@@ -296,9 +297,9 @@ export default function MobileScannerModal({
     });
   }, [playScanBeep, triggerHaptic]);
 
-  // ✅ Acción: Usuario Confirma el Código Escaneado
-  const handleConfirmScan = (confirmedData: PendingConfirmationData) => {
-    const { code, format, workflow, anaquel, piso } = confirmedData;
+  // ✅ Acción: Usuario Confirma el Código Escaneado (Persistencia en Memoria y Supabase)
+  const handleConfirmScan = async (confirmedData: PendingConfirmationData) => {
+    const { code, format, workflow, anaquel, piso, pkg, cli } = confirmedData;
     const now = Date.now();
     const targetLocation = `${anaquel}-${piso}`;
 
@@ -309,6 +310,61 @@ export default function MobileScannerModal({
       }
       if (onConfirmRef.current) {
         onConfirmRef.current(code, format, { mode: 'slotting', location: targetLocation });
+      }
+
+      // 💾 Guardado directo en Supabase (Postgres)
+      try {
+        const upper = code.trim().toUpperCase();
+        if (pkg) {
+          // 1. Paquete existente: actualizar posición de anaquel y piso
+          await supabase
+            .from('paquetes')
+            .update({
+              anaquel: anaquel,
+              piso: piso,
+              posicion_estante: targetLocation,
+              ubicacion_actual: 'AmexLince'
+            })
+            .eq('id', pkg.id);
+
+          await supabase.from('historial_trazabilidad').insert({
+            paquete_id: pkg.id,
+            ubicacion: targetLocation,
+            descripcion_evento: `Escaneado y asignado a estantería: ${targetLocation}`,
+            usuario_operador: 'Operador Logístico AMEX'
+          });
+        } else {
+          // 2. Paquete nuevo: registrar automáticamente en tabla paquetes
+          const newWr = upper.startsWith('WR-') ? upper : `WR-${upper.slice(-6)}`;
+          await supabase.from('paquetes').insert({
+            codigo_casillero: cli ? cli.codigoCasillero : 'AMEX-PER-1001',
+            numero_recibo_bodega: newWr,
+            tracking_usa: upper,
+            tipo_empaque: 'CAJA',
+            dni_consignatario: cli ? cli.documentoIdentidad : '',
+            nombre_consignatario: cli ? cli.nombre : 'Cliente AMEX',
+            descripcion: 'Mercadería ingresada por Escáner',
+            peso_kg: 1.0,
+            valor_declarado_usd: 50.0,
+            ubicacion_actual: 'AmexLince',
+            anaquel: anaquel,
+            piso: piso,
+            posicion_estante: targetLocation,
+            metodo_entrega: 'CarroAmexDomicilio',
+            estado_entrega: 'EnAlmacen'
+          });
+        }
+
+        // 3. Registrar auditoría en escaneos_log
+        await supabase.from('escaneos_log').insert({
+          codigo: code,
+          formato: format,
+          modo_workflow: 'slotting',
+          ubicacion: targetLocation,
+          operador: 'Operador Logístico AMEX'
+        });
+      } catch (err) {
+        console.warn('Error saving scan to Supabase:', err);
       }
     } else if (workflow === 'lookup') {
       setLastScannedCode({ code, time: now });
