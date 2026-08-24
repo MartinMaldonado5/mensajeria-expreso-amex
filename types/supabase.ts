@@ -11,6 +11,7 @@ export type Database = {
     Tables: {
       clientes: {
         Row: {
+          actualizado_en: string | null
           agencia_destino: string | null
           codigo_casillero: string
           creado_en: string | null
@@ -28,6 +29,7 @@ export type Database = {
           transportista_preferido: string | null
         }
         Insert: {
+          actualizado_en?: string | null
           agencia_destino?: string | null
           codigo_casillero: string
           creado_en?: string | null
@@ -45,6 +47,7 @@ export type Database = {
           transportista_preferido?: string | null
         }
         Update: {
+          actualizado_en?: string | null
           agencia_destino?: string | null
           codigo_casillero?: string
           creado_en?: string | null
@@ -65,6 +68,7 @@ export type Database = {
       }
       embarques_master: {
         Row: {
+          actualizado_en: string | null
           almacen_destino: string | null
           almacen_origen: string | null
           codigo_guia_master: string
@@ -77,6 +81,7 @@ export type Database = {
           referencia_socio: string | null
         }
         Insert: {
+          actualizado_en?: string | null
           almacen_destino?: string | null
           almacen_origen?: string | null
           codigo_guia_master: string
@@ -89,6 +94,7 @@ export type Database = {
           referencia_socio?: string | null
         }
         Update: {
+          actualizado_en?: string | null
           almacen_destino?: string | null
           almacen_origen?: string | null
           codigo_guia_master?: string
@@ -101,6 +107,47 @@ export type Database = {
           referencia_socio?: string | null
         }
         Relationships: []
+      }
+      escaneos_log: {
+        Row: {
+          codigo: string
+          creado_en: string | null
+          formato: string | null
+          id: string
+          modo_workflow: string | null
+          operador: string | null
+          paquete_id: string | null
+          ubicacion: string | null
+        }
+        Insert: {
+          codigo: string
+          creado_en?: string | null
+          formato?: string | null
+          id?: string
+          modo_workflow?: string | null
+          operador?: string | null
+          paquete_id?: string | null
+          ubicacion?: string | null
+        }
+        Update: {
+          codigo?: string
+          creado_en?: string | null
+          formato?: string | null
+          id?: string
+          modo_workflow?: string | null
+          operador?: string | null
+          paquete_id?: string | null
+          ubicacion?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "escaneos_log_paquete_id_fkey"
+            columns: ["paquete_id"]
+            isOneToOne: false
+            referencedRelation: "paquetes"
+            referencedColumns: ["id"]
+          }
+        ]
       }
       historial_trazabilidad: {
         Row: {
@@ -134,7 +181,7 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "paquetes"
             referencedColumns: ["id"]
-          },
+          }
         ]
       }
       ordenes_liquidacion: {
@@ -196,11 +243,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "paquetes"
             referencedColumns: ["id"]
-          },
+          }
         ]
       }
       paquetes: {
         Row: {
+          actualizado_en: string | null
+          anaquel: string | null
           cliente_id: string | null
           codigo_casillero: string
           creado_en: string | null
@@ -215,12 +264,16 @@ export type Database = {
           numero_factura: string | null
           numero_recibo_bodega: string
           peso_kg: number | null
+          piso: string | null
+          posicion_estante: string | null
           tipo_empaque: string | null
           tracking_usa: string
           ubicacion_actual: string | null
           valor_declarado_usd: number | null
         }
         Insert: {
+          actualizado_en?: string | null
+          anaquel?: string | null
           cliente_id?: string | null
           codigo_casillero: string
           creado_en?: string | null
@@ -235,12 +288,16 @@ export type Database = {
           numero_factura?: string | null
           numero_recibo_bodega: string
           peso_kg?: number | null
+          piso?: string | null
+          posicion_estante?: string | null
           tipo_empaque?: string | null
           tracking_usa: string
           ubicacion_actual?: string | null
           valor_declarado_usd?: number | null
         }
         Update: {
+          actualizado_en?: string | null
+          anaquel?: string | null
           cliente_id?: string | null
           codigo_casillero?: string
           creado_en?: string | null
@@ -255,6 +312,8 @@ export type Database = {
           numero_factura?: string | null
           numero_recibo_bodega?: string
           peso_kg?: number | null
+          piso?: string | null
+          posicion_estante?: string | null
           tipo_empaque?: string | null
           tracking_usa?: string
           ubicacion_actual?: string | null
@@ -274,7 +333,7 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "embarques_master"
             referencedColumns: ["id"]
-          },
+          }
         ]
       }
       usuarios: {
