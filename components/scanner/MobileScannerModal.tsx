@@ -132,6 +132,9 @@ export default function MobileScannerModal({
   const [vibrationEnabled, setVibrationEnabled] = useState(true);
 
   // Entrada Manual y Subida de Foto
+  const [manualInputType, setManualInputType] = useState<'wr_preset' | 'free_code'>('wr_preset');
+  const [manualPrefix, setManualPrefix] = useState<'WR000' | 'WR-000'>('WR000');
+  const [manualDigits, setManualDigits] = useState('');
   const [manualCodeInput, setManualCodeInput] = useState('');
   const [isProcessingImage, setIsProcessingImage] = useState(false);
   const [imageError, setImageError] = useState<string | null>(null);
@@ -791,13 +794,26 @@ export default function MobileScannerModal({
     }
   };
 
-  // Entrada manual
+  // Entrada manual optimizada con prefijo WR000 fijo + 6 dígitos
   const handleManualSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const clean = manualCodeInput.trim().toUpperCase();
-    if (!clean) return;
-    handleBarcodeFoundRef.current(clean, 'MANUAL_ENTRY');
-    setManualCodeInput('');
+    if (manualInputType === 'wr_preset') {
+      const cleanDigits = manualDigits.trim();
+      if (!cleanDigits) return;
+      let fullCode = '';
+      if (cleanDigits.toUpperCase().startsWith('WR')) {
+        fullCode = cleanDigits.toUpperCase();
+      } else {
+        fullCode = `${manualPrefix}${cleanDigits}`;
+      }
+      handleBarcodeFoundRef.current(fullCode, 'MANUAL_ENTRY');
+      setManualDigits('');
+    } else {
+      const clean = manualCodeInput.trim().toUpperCase();
+      if (!clean) return;
+      handleBarcodeFoundRef.current(clean, 'MANUAL_ENTRY');
+      setManualCodeInput('');
+    }
   };
 
   if (!isOpen) return null;
@@ -1843,7 +1859,7 @@ export default function MobileScannerModal({
         </div>
       )}
 
-      {/* ENTRADA MANUAL DE CÓDIGOS */}
+      {/* ENTRADA MANUAL DE CÓDIGOS OPTIMIZADA */}
       <div
         style={{
           marginTop: '14px',
@@ -1851,46 +1867,206 @@ export default function MobileScannerModal({
           borderTop: '1px solid #e2e8f0'
         }}
       >
-        <form onSubmit={handleManualSubmit} style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-          <div style={{ position: 'relative', flex: 1 }}>
-            <Keyboard className="w-4 h-4 text-slate-400" style={{ position: 'absolute', left: '10px', top: '12px' }} />
-            <input
-              type="text"
-              placeholder="Ingreso manual: WR-000451, AMEX-PER-1001, 1Z999..."
-              value={manualCodeInput}
-              onChange={e => setManualCodeInput(e.target.value)}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', flexWrap: 'wrap', gap: '6px' }}>
+          <span style={{ fontSize: '11px', fontWeight: 800, color: '#475569', display: 'flex', alignItems: 'center', gap: '5px' }}>
+            <Keyboard className="w-3.5 h-3.5 text-blue-600" /> Ingreso Manual Rápido:
+          </span>
+          <div style={{ display: 'flex', gap: '4px', background: '#f1f5f9', padding: '2px', borderRadius: '6px' }}>
+            <button
+              type="button"
+              onClick={() => setManualInputType('wr_preset')}
               style={{
-                width: '100%',
-                height: '38px',
-                paddingLeft: '32px',
-                paddingRight: '10px',
-                borderRadius: '8px',
-                border: '1px solid #cbd5e1',
-                fontSize: '12px',
-                fontFamily: 'JetBrains Mono, monospace',
-                fontWeight: 700,
-                outline: 'none'
+                border: 'none',
+                background: manualInputType === 'wr_preset' ? '#2563eb' : 'transparent',
+                color: manualInputType === 'wr_preset' ? '#ffffff' : '#64748b',
+                fontSize: '10px',
+                fontWeight: 800,
+                padding: '2px 8px',
+                borderRadius: '4px',
+                cursor: 'pointer'
               }}
-            />
+            >
+              🏷️ Guía WR000
+            </button>
+            <button
+              type="button"
+              onClick={() => setManualInputType('free_code')}
+              style={{
+                border: 'none',
+                background: manualInputType === 'free_code' ? '#2563eb' : 'transparent',
+                color: manualInputType === 'free_code' ? '#ffffff' : '#64748b',
+                fontSize: '10px',
+                fontWeight: 800,
+                padding: '2px 8px',
+                borderRadius: '4px',
+                cursor: 'pointer'
+              }}
+            >
+              🔤 Libre / Tracking
+            </button>
           </div>
-          <button
-            type="submit"
-            disabled={!manualCodeInput.trim()}
-            className="btn btn-primary"
-            style={{
-              height: '38px',
-              padding: '0 14px',
-              fontSize: '12px',
-              borderRadius: '8px',
-              fontWeight: 800,
-              gap: '4px',
-              opacity: manualCodeInput.trim() ? 1 : 0.6
-            }}
-          >
-            <Plus className="w-3.5 h-3.5" /> Procesar
-          </button>
+        </div>
+
+        <form onSubmit={handleManualSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+          {manualInputType === 'wr_preset' ? (
+            <div>
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'stretch',
+                  borderRadius: '10px',
+                  border: '2px solid #3b82f6',
+                  overflow: 'hidden',
+                  boxShadow: '0 2px 8px rgba(37,99,235,0.12)',
+                  background: '#ffffff'
+                }}
+              >
+                {/* Prefijo Fijo WR000 */}
+                <div
+                  style={{
+                    background: 'linear-gradient(135deg, #1e40af 0%, #2563eb 100%)',
+                    color: '#ffffff',
+                    fontFamily: 'JetBrains Mono, monospace',
+                    fontWeight: 900,
+                    fontSize: '14px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: '0 12px',
+                    letterSpacing: '1px',
+                    borderRight: '1.5px solid #1d4ed8',
+                    userSelect: 'none'
+                  }}
+                  title="Prefijo fijo por defecto de Guías AMEX"
+                >
+                  {manualPrefix}
+                </div>
+
+                {/* Campo de 6 dígitos numéricos */}
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  maxLength={6}
+                  placeholder="Escribe 6 dígitos (ej: 000451)"
+                  value={manualDigits}
+                  onChange={e => {
+                    const val = e.target.value.replace(/[^0-9]/g, '').slice(0, 6);
+                    setManualDigits(val);
+                  }}
+                  style={{
+                    flex: 1,
+                    minWidth: '120px',
+                    height: '42px',
+                    padding: '0 12px',
+                    border: 'none',
+                    fontSize: '15px',
+                    fontFamily: 'JetBrains Mono, monospace',
+                    fontWeight: 800,
+                    color: '#0f172a',
+                    outline: 'none',
+                    background: '#ffffff'
+                  }}
+                />
+
+                {/* Contador de dígitos */}
+                {manualDigits && (
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      padding: '0 8px',
+                      fontSize: '11px',
+                      fontWeight: 800,
+                      color: manualDigits.length === 6 ? '#16a34a' : '#64748b',
+                      background: '#f8fafc'
+                    }}
+                  >
+                    {manualDigits.length}/6
+                  </div>
+                )}
+
+                {/* Botón Procesar */}
+                <button
+                  type="submit"
+                  disabled={!manualDigits.trim()}
+                  className="btn btn-primary"
+                  style={{
+                    height: '42px',
+                    padding: '0 16px',
+                    fontSize: '12.5px',
+                    borderRadius: '0',
+                    fontWeight: 800,
+                    gap: '4px',
+                    background: manualDigits.trim() ? '#16a34a' : '#94a3b8',
+                    borderColor: manualDigits.trim() ? '#15803d' : '#94a3b8',
+                    cursor: manualDigits.trim() ? 'pointer' : 'not-allowed'
+                  }}
+                >
+                  <Plus className="w-4 h-4" /> Procesar
+                </button>
+              </div>
+
+              {/* Vista previa en tiempo real de la guía completa */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px', padding: '0 4px', fontSize: '11px', color: '#64748b' }}>
+                <span>
+                  Guía resultante: <strong style={{ color: '#2563eb', fontFamily: 'JetBrains Mono' }}>{manualPrefix}{manualDigits || '______'}</strong>
+                </span>
+                {manualDigits && (
+                  <button
+                    type="button"
+                    onClick={() => setManualDigits('')}
+                    style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: '10.5px', fontWeight: 700, cursor: 'pointer', padding: 0 }}
+                  >
+                    Limpiar
+                  </button>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <div style={{ position: 'relative', flex: 1 }}>
+                <Keyboard className="w-4 h-4 text-slate-400" style={{ position: 'absolute', left: '10px', top: '12px' }} />
+                <input
+                  type="text"
+                  placeholder="Ingreso libre: 1Z99999999, 94001000..., AMEX-PER-1001..."
+                  value={manualCodeInput}
+                  onChange={e => setManualCodeInput(e.target.value)}
+                  style={{
+                    width: '100%',
+                    height: '42px',
+                    paddingLeft: '32px',
+                    paddingRight: '10px',
+                    borderRadius: '8px',
+                    border: '1.5px solid #cbd5e1',
+                    fontSize: '12.5px',
+                    fontFamily: 'JetBrains Mono, monospace',
+                    fontWeight: 700,
+                    outline: 'none'
+                  }}
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={!manualCodeInput.trim()}
+                className="btn btn-primary"
+                style={{
+                  height: '42px',
+                  padding: '0 14px',
+                  fontSize: '12.5px',
+                  borderRadius: '8px',
+                  fontWeight: 800,
+                  gap: '4px',
+                  opacity: manualCodeInput.trim() ? 1 : 0.6
+                }}
+              >
+                <Plus className="w-3.5 h-3.5" /> Procesar
+              </button>
+            </div>
+          )}
         </form>
       </div>
+
     </div>
   );
 
