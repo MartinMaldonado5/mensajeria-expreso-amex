@@ -1385,6 +1385,9 @@ export default function MobileScannerModal({
               style={{
                 width: '100%',
                 maxWidth: '400px',
+                maxHeight: '92vh',
+                overflowY: 'auto',
+                WebkitOverflowScrolling: 'touch',
                 background: '#ffffff',
                 borderRadius: '16px',
                 padding: '18px',
@@ -1613,6 +1616,9 @@ export default function MobileScannerModal({
               style={{
                 width: '100%',
                 maxWidth: '380px',
+                maxHeight: '92vh',
+                overflowY: 'auto',
+                WebkitOverflowScrolling: 'touch',
                 background: '#ffffff',
                 borderRadius: '16px',
                 padding: '16px',

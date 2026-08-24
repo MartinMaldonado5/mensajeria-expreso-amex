@@ -952,4 +952,153 @@ html.lenis, html.lenis body {
   display: block;
 }
 
+/* ==========================================================================
+   WMS & OPERATIONS MOBILE RESPONSIVE ADAPTATIONS
+   ========================================================================== */
+.wms-subtab-container {
+  display: flex;
+  gap: 8px;
+  border-bottom: 2px solid #e2e8f0;
+  padding-bottom: 8px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.wms-subtab-container::-webkit-scrollbar {
+  display: none;
+}
+
+.wms-subtab-btn {
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-weight: 800;
+  font-size: 12.5px;
+  border: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.wms-modal-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.wms-modal-grid-3 {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 10px;
+}
+
+/* Responsive Modals & Popups for Mobile Screens */
+@media (max-width: 768px) {
+  .modal-backdrop,
+  .modal-overlay {
+    position: fixed !important;
+    inset: 0 !important;
+    background: rgba(15, 23, 42, 0.75) !important;
+    backdrop-filter: blur(3px) !important;
+    z-index: 1000 !important;
+    display: flex !important;
+    align-items: flex-end !important; /* Bottom-sheet feel on phones */
+    justify-content: center !important;
+    padding: 0 !important;
+  }
+
+  .modal-dialog,
+  .modal-content,
+  .modal-content--pkg {
+    width: 100% !important;
+    max-width: 100vw !important;
+    border-radius: 18px 18px 0 0 !important;
+    max-height: 90vh !important;
+    margin: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    background: #ffffff !important;
+    box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.4) !important;
+    animation: slideUpModal 0.22s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  }
+
+  @keyframes slideUpModal {
+    from {
+      transform: translateY(100%);
+    }
+    to {
+      transform: translateY(0);
+    }
+  }
+
+  .modal-header,
+  .pkg-header {
+    padding: 14px 16px !important;
+    flex-shrink: 0 !important;
+  }
+
+  .modal-body,
+  .pkg-body {
+    padding: 14px !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    flex: 1 !important;
+  }
+
+  .modal-footer,
+  .pkg-footer {
+    padding: 12px 14px !important;
+    flex-direction: column-reverse !important;
+    gap: 8px !important;
+    flex-shrink: 0 !important;
+  }
+
+  .modal-footer .btn,
+  .pkg-footer .btn {
+    width: 100% !important;
+    min-height: 44px !important;
+    justify-content: center !important;
+    font-size: 14px !important;
+    font-weight: 800 !important;
+  }
+
+  /* Form Input Controls Mobile Touch Optimization */
+  .form-control,
+  .pkg-input,
+  .pkg-select {
+    font-size: 16px !important; /* Prevents unwanted iOS zoom */
+    min-height: 44px !important;
+    border-radius: 8px !important;
+  }
+
+  .wms-modal-grid-2,
+  .wms-modal-grid-3,
+  .pkg-layout {
+    grid-template-columns: 1fr !important;
+    gap: 10px !important;
+  }
+
+  .pkg-preview {
+    position: static !important;
+    margin-top: 14px !important;
+    width: 100% !important;
+  }
+
+  .pkg-grid,
+  .pkg-grid--3 {
+    grid-template-columns: 1fr !important;
+  }
+
+  .pkg-section {
+    padding: 12px 14px !important;
+    margin-bottom: 10px !important;
+  }
+}
+
+
 

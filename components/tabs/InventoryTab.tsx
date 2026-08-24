@@ -797,85 +797,53 @@ export default function InventoryTab({
       </div>
 
       {/* Selector de Sub-Pestañas */}
-      <div style={{ display: 'flex', gap: '8px', borderBottom: '2px solid #e2e8f0', paddingBottom: '8px', flexWrap: 'wrap' }}>
+      <div className="wms-subtab-container">
         <button
           onClick={() => setActiveSubTab('existencias')}
+          className="wms-subtab-btn"
           style={{
-            padding: '8px 16px',
-            borderRadius: '8px',
-            fontWeight: 800,
-            fontSize: '13px',
-            border: 'none',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            background: activeSubTab === 'existencias' ? '#2563eb' : 'transparent',
+            background: activeSubTab === 'existencias' ? '#2563eb' : '#f8fafc',
             color: activeSubTab === 'existencias' ? '#ffffff' : '#64748b',
-            transition: 'all 0.15s ease'
+            border: activeSubTab === 'existencias' ? '1px solid #1d4ed8' : '1px solid #e2e8f0'
           }}
         >
-          <Boxes className="w-4 h-4" /> 1. Existencias y Almacén ({filteredPaquetes.length})
+          <Boxes className="w-4 h-4" /> 1. Existencias ({filteredPaquetes.length})
         </button>
 
         <button
           onClick={() => setActiveSubTab('movimientos')}
+          className="wms-subtab-btn"
           style={{
-            padding: '8px 16px',
-            borderRadius: '8px',
-            fontWeight: 800,
-            fontSize: '13px',
-            border: 'none',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            background: activeSubTab === 'movimientos' ? '#2563eb' : 'transparent',
+            background: activeSubTab === 'movimientos' ? '#2563eb' : '#f8fafc',
             color: activeSubTab === 'movimientos' ? '#ffffff' : '#64748b',
-            transition: 'all 0.15s ease'
+            border: activeSubTab === 'movimientos' ? '1px solid #1d4ed8' : '1px solid #e2e8f0'
           }}
         >
-          <ArrowRightLeft className="w-4 h-4" /> 2. Kardex de Movimientos & Trazabilidad ({kardexList.length})
+          <ArrowRightLeft className="w-4 h-4" /> 2. Kardex Movimientos ({kardexList.length})
         </button>
 
         <button
           onClick={() => setActiveSubTab('matriz')}
+          className="wms-subtab-btn"
           style={{
-            padding: '8px 16px',
-            borderRadius: '8px',
-            fontWeight: 800,
-            fontSize: '13px',
-            border: 'none',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            background: activeSubTab === 'matriz' ? '#2563eb' : 'transparent',
+            background: activeSubTab === 'matriz' ? '#2563eb' : '#f8fafc',
             color: activeSubTab === 'matriz' ? '#ffffff' : '#64748b',
-            transition: 'all 0.15s ease'
+            border: activeSubTab === 'matriz' ? '1px solid #1d4ed8' : '1px solid #e2e8f0'
           }}
         >
-          <Layers className="w-4 h-4" /> 3. Matriz Visual de Anaqueles (Slotting)
+          <Layers className="w-4 h-4" /> 3. Matriz de Anaqueles (Slotting)
         </button>
 
         <button
           onClick={() => setActiveSubTab('gestor')}
+          className="wms-subtab-btn"
           style={{
-            padding: '8px 16px',
-            borderRadius: '8px',
-            fontWeight: 800,
-            fontSize: '13px',
-            border: 'none',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            background: activeSubTab === 'gestor' ? '#2563eb' : 'transparent',
+            background: activeSubTab === 'gestor' ? '#2563eb' : '#f8fafc',
             color: activeSubTab === 'gestor' ? '#ffffff' : '#64748b',
-            transition: 'all 0.15s ease'
+            border: activeSubTab === 'gestor' ? '1px solid #1d4ed8' : '1px solid #e2e8f0'
           }}
         >
-          <Settings className="w-4 h-4" /> 4. Configuración de Estanterías ({posicionesList.length})
+          <Settings className="w-4 h-4" /> 4. Gestor de Estanterías ({posicionesList.length})
         </button>
       </div>
 
@@ -1963,7 +1931,7 @@ export default function InventoryTab({
                 </select>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+              <div className="wms-modal-grid-2">
                 <div className="form-group">
                   <label style={{ fontSize: '12px', fontWeight: 800, color: '#334155' }}>Anaquel Destino</label>
                   <select
@@ -2060,7 +2028,7 @@ export default function InventoryTab({
             </div>
 
             <form onSubmit={handleCreatePosition} className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+              <div className="wms-modal-grid-2">
                 <div className="form-group">
                   <label style={{ fontSize: '12px', fontWeight: 800, color: '#334155' }}>Almacén Sede</label>
                   <select
@@ -2087,7 +2055,7 @@ export default function InventoryTab({
                 </div>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+              <div className="wms-modal-grid-2">
                 <div className="form-group">
                   <label style={{ fontSize: '12px', fontWeight: 800, color: '#334155' }}>Nivel de Piso</label>
                   <select
@@ -2117,7 +2085,7 @@ export default function InventoryTab({
                 </div>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+              <div className="wms-modal-grid-2">
                 <div className="form-group">
                   <label style={{ fontSize: '12px', fontWeight: 800, color: '#334155' }}>Capacidad Máx. (Paquetes)</label>
                   <input
@@ -2187,7 +2155,7 @@ export default function InventoryTab({
             </div>
 
             <form onSubmit={handleSaveEdit} className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+              <div className="wms-modal-grid-2">
                 <div className="form-group">
                   <label style={{ fontSize: '12px', fontWeight: 800, color: '#334155' }}>Guía WR (No editable)</label>
                   <input
@@ -2233,7 +2201,7 @@ export default function InventoryTab({
                 />
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px' }}>
+              <div className="wms-modal-grid-3">
                 <div className="form-group">
                   <label style={{ fontSize: '12px', fontWeight: 800, color: '#334155' }}>Peso (Kg)</label>
                   <input
@@ -2272,7 +2240,7 @@ export default function InventoryTab({
                 </div>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+              <div className="wms-modal-grid-2">
                 <div className="form-group">
                   <label style={{ fontSize: '12px', fontWeight: 800, color: '#334155' }}>Almacén Sede</label>
                   <select
