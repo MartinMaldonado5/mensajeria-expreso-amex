@@ -160,8 +160,8 @@ export default function DashboardPage() {
     setCurrentUser({ nombre: 'Operador Logístico AMEX', rol: 'admin' });
   };
 
-  const [clientes, setClientes] = useState<Cliente[]>(INITIAL_CLIENTES);
-  const [paquetes, setPaquetes] = useState<Paquete[]>(INITIAL_PAQUETES);
+  const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [paquetes, setPaquetes] = useState<Paquete[]>([]);
   const [scannedLogs, setScannedLogs] = useState<{ code: string; format: string; time: string; location?: string }[]>([]);
   const [selectedPdfUrl, setSelectedPdfUrl] = useState<string | null>(null);
   const [selectedDniImage, setSelectedDniImage] = useState<{ url: string; titulo: string; subtitulo: string } | null>(null);
@@ -181,55 +181,51 @@ export default function DashboardPage() {
           supabase.from('paquetes').select('*').order('creado_en', { ascending: false }),
         ]);
 
-        const dbClientes = clientesRes.data;
-        if (dbClientes && dbClientes.length > 0) {
-          setClientes(dbClientes.map(c => ({
-            id: c.id,
-            codigoCasillero: c.codigo_casillero,
-            nombre: c.nombre,
-            documentoIdentidad: c.documento_identidad,
-            telefono: c.telefono || '',
-            email: c.email || '',
-            departamento: c.departamento || 'LIMA',
-            provincia: c.provincia || 'LIMA',
-            distrito: c.distrito || 'LINCE',
-            direccionEntrega: c.direccion_entrega || '',
-            transportistaPreferido: c.transportista_preferido || 'CARRO AMEX',
-            agenciaDestino: c.agencia_destino || '',
-            dniFrontalUrl: c.dni_frontal_url || '',
-            dniReversoUrl: c.dni_reverso_url || '',
-            creadoEn: c.creado_en || ''
-          })));
-        }
+        const dbClientes = clientesRes.data || [];
+        setClientes(dbClientes.map(c => ({
+          id: c.id,
+          codigoCasillero: c.codigo_casillero,
+          nombre: c.nombre,
+          documentoIdentidad: c.documento_identidad,
+          telefono: c.telefono || '',
+          email: c.email || '',
+          departamento: c.departamento || 'LIMA',
+          provincia: c.provincia || 'LIMA',
+          distrito: c.distrito || 'LINCE',
+          direccionEntrega: c.direccion_entrega || '',
+          transportistaPreferido: c.transportista_preferido || 'CARRO AMEX',
+          agenciaDestino: c.agencia_destino || '',
+          dniFrontalUrl: c.dni_frontal_url || '',
+          dniReversoUrl: c.dni_reverso_url || '',
+          creadoEn: c.creado_en || ''
+        })));
 
-        const dbPaquetes = paquetesRes.data;
-        if (dbPaquetes && dbPaquetes.length > 0) {
-          setPaquetes(dbPaquetes.map(p => {
-            const pos = p.posicion_estante || (p.anaquel && p.piso ? `${p.anaquel}-${p.piso}` : 'REC');
-            const [ana, pis] = pos.includes('-') ? pos.split('-') : [pos, 'P1'];
-            return {
-              id: p.id,
-              codigoCasillero: p.codigo_casillero,
-              numeroReciboBodega: p.numero_recibo_bodega,
-              trackingUsa: p.tracking_usa,
-              tipoEmpaque: p.tipo_empaque || 'CAJA',
-              numeroFactura: p.numero_factura || '',
-              dniConsignatario: p.dni_consignatario || '',
-              nombreConsignatario: p.nombre_consignatario || '',
-              descripcion: p.descripcion || '',
-              pesoKg: Number(p.peso_kg || 0),
-              valorDeclaradoUsd: Number(p.valor_declarado_usd || 0),
-              ubicacionActual: (p.ubicacion_actual as TipoUbicacion) || 'TibCourierMiami',
-              anaquel: p.anaquel || ana,
-              piso: p.piso || pis,
-              posicionEstante: pos,
-              metodoEntrega: (p.metodo_entrega as TipoMetodoEntrega) || 'CarroAmexDomicilio',
-              estadoEntrega: (p.estado_entrega as TipoEstadoEntrega) || 'EnAlmacen',
-              facturaPdfUrl: p.factura_pdf_url || '',
-              creadoEn: p.creado_en || ''
-            };
-          }));
-        }
+        const dbPaquetes = paquetesRes.data || [];
+        setPaquetes(dbPaquetes.map(p => {
+          const pos = p.posicion_estante || (p.anaquel && p.piso ? `${p.anaquel}-${p.piso}` : 'REC');
+          const [ana, pis] = pos.includes('-') ? pos.split('-') : [pos, 'P1'];
+          return {
+            id: p.id,
+            codigoCasillero: p.codigo_casillero,
+            numeroReciboBodega: p.numero_recibo_bodega,
+            trackingUsa: p.tracking_usa,
+            tipoEmpaque: p.tipo_empaque || 'CAJA',
+            numeroFactura: p.numero_factura || '',
+            dniConsignatario: p.dni_consignatario || '',
+            nombreConsignatario: p.nombre_consignatario || '',
+            descripcion: p.descripcion || '',
+            pesoKg: Number(p.peso_kg || 0),
+            valorDeclaradoUsd: Number(p.valor_declarado_usd || 0),
+            ubicacionActual: (p.ubicacion_actual as TipoUbicacion) || 'TibCourierMiami',
+            anaquel: p.anaquel || ana,
+            piso: p.piso || pis,
+            posicionEstante: pos,
+            metodoEntrega: (p.metodo_entrega as TipoMetodoEntrega) || 'CarroAmexDomicilio',
+            estadoEntrega: (p.estado_entrega as TipoEstadoEntrega) || 'EnAlmacen',
+            facturaPdfUrl: p.factura_pdf_url || '',
+            creadoEn: p.creado_en || ''
+          };
+        }));
       } catch (err) {
         console.warn('Supabase initial fetch sync:', err);
       } finally {
