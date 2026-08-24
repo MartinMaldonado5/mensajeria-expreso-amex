@@ -933,79 +933,44 @@ export default function MobileScannerModal({
       </div>
 
       {/* 🎯 SELECTOR DE MODO OPERATIVO (WORKFLOWS) */}
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))',
-          gap: '6px',
-          background: '#f8fafc',
-          padding: '4px',
-          borderRadius: '10px',
-          border: '1px solid #e2e8f0',
-          marginBottom: '10px'
-        }}
-      >
+      <div className="scanner-workflow-selector">
         <button
           onClick={() => setWorkflowMode('slotting')}
+          className="scanner-workflow-btn"
           style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '5px',
-            height: '34px',
-            border: 'none',
-            borderRadius: '8px',
-            fontSize: '11.5px',
-            fontWeight: 800,
-            cursor: 'pointer',
-            background: workflowMode === 'slotting' ? '#2563eb' : 'transparent',
-            color: workflowMode === 'slotting' ? '#ffffff' : '#64748b',
-            boxShadow: workflowMode === 'slotting' ? '0 2px 6px rgba(37,99,235,0.3)' : 'none'
+            background: workflowMode === 'slotting' ? '#2563eb' : '#ffffff',
+            color: workflowMode === 'slotting' ? '#ffffff' : '#334155',
+            border: workflowMode === 'slotting' ? '1.5px solid #1d4ed8' : '1px solid #cbd5e1',
+            boxShadow: workflowMode === 'slotting' ? '0 2px 8px rgba(37,99,235,0.35)' : 'none'
           }}
         >
-          <Layers className="w-3.5 h-3.5" /> 📦 Asignar Anaquel
+          <Layers className="w-4 h-4" /> 📦 Asignar Anaquel
         </button>
 
         <button
           onClick={() => setWorkflowMode('lookup')}
+          className="scanner-workflow-btn"
           style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '5px',
-            height: '34px',
-            border: 'none',
-            borderRadius: '8px',
-            fontSize: '11.5px',
-            fontWeight: 800,
-            cursor: 'pointer',
-            background: workflowMode === 'lookup' ? '#16a34a' : 'transparent',
-            color: workflowMode === 'lookup' ? '#ffffff' : '#64748b',
-            boxShadow: workflowMode === 'lookup' ? '0 2px 6px rgba(22,163,74,0.3)' : 'none'
+            background: workflowMode === 'lookup' ? '#16a34a' : '#ffffff',
+            color: workflowMode === 'lookup' ? '#ffffff' : '#334155',
+            border: workflowMode === 'lookup' ? '1.5px solid #15803d' : '1px solid #cbd5e1',
+            boxShadow: workflowMode === 'lookup' ? '0 2px 8px rgba(22,163,74,0.35)' : 'none'
           }}
         >
-          <Search className="w-3.5 h-3.5" /> 🔍 Localizar 360°
+          <Search className="w-4 h-4" /> 🔍 Localizar 360°
         </button>
 
         <button
           onClick={() => setWorkflowMode('delivery')}
+          className="scanner-workflow-btn"
           style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '5px',
-            height: '34px',
-            border: 'none',
-            borderRadius: '8px',
-            fontSize: '11.5px',
-            fontWeight: 800,
-            cursor: 'pointer',
-            background: workflowMode === 'delivery' ? '#9333ea' : 'transparent',
-            color: workflowMode === 'delivery' ? '#ffffff' : '#64748b',
-            boxShadow: workflowMode === 'delivery' ? '0 2px 6px rgba(147,51,234,0.3)' : 'none'
+            background: workflowMode === 'delivery' ? '#9333ea' : '#ffffff',
+            color: workflowMode === 'delivery' ? '#ffffff' : '#334155',
+            border: workflowMode === 'delivery' ? '1.5px solid #7e22ce' : '1px solid #cbd5e1',
+            boxShadow: workflowMode === 'delivery' ? '0 2px 8px rgba(147,51,234,0.35)' : 'none'
           }}
         >
-          <Truck className="w-3.5 h-3.5" /> 🚚 Despachar
+          <Truck className="w-4 h-4" /> 🚚 Despachar
         </button>
       </div>
 
