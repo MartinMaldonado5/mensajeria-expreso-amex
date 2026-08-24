@@ -754,11 +754,17 @@ tr:hover { background: #f8fafc !important; }
     max-width: 82vw;
     z-index: 700;
     box-shadow: 12px 0 35px rgba(0,0,0,0.65);
-    transform: translateX(0);
-    opacity: 1;
-    visibility: visible;
-    pointer-events: auto;
+    transform: translateX(-105%) !important;
+    opacity: 0 !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
     transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.22s;
+  }
+  .sap-sidebar:not(.collapsed) {
+    transform: translateX(0) !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+    pointer-events: auto !important;
   }
   .sap-sidebar.collapsed {
     transform: translateX(-105%) !important;
