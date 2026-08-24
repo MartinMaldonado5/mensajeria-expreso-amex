@@ -95,6 +95,7 @@ export default function Sidebar({
 
         <div className="sap-sub-menu" style={{ paddingLeft: '2px', display: 'flex', flexDirection: 'column', gap: '3px' }}>
           {navItem('mm-inventory', 'fa-solid fa-boxes-stacked', '📦 Inventario & Movimientos WMS')}
+          {navItem('wms-picking', 'fa-solid fa-clipboard-list', '📋 Picking & Despacho (Shalom/Olva)')}
           {navItem('mobile-scanner', 'fa-solid fa-barcode', '📱 Escáner de Códigos')}
           {navItem('mm-lince', 'fa-solid fa-store', '🏢 Almacén Central (Lince)')}
           {navItem('mm-miami', 'fa-solid fa-plane-departure', '✈️ Almacén Miami (USA)')}

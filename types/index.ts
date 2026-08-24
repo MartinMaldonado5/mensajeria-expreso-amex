@@ -151,4 +151,41 @@ export interface ScannedLog {
   syncedAt?: string;
 }
 
+export type TipoEstadoPicking = 'PENDIENTE' | 'EN_PROCESO' | 'COMPLETADO' | 'DESPACHADO';
+
+export interface OrdenPicking {
+  id: string;
+  codigoOrden: string;               // Ej: PCK-SHALOM-20260824-001
+  transportistaAgencia: string;      // SHALOM, OLVA COURIER, MARVISUR, CARRO AMEX
+  destinoCiudad: string;
+  estado: TipoEstadoPicking;
+  operadorAsignado: string;
+  totalPaquetes: number;
+  recolectadosPaquetes: number;
+  notas?: string;
+  creadoPor: string;
+  creadoEn: string;
+  completadoEn?: string;
+}
+
+export interface ItemPicking {
+  id: string;
+  ordenPickingId: string;
+  paqueteId?: string;
+  codigoReciboBodega: string;        // Ej: WR-000451
+  trackingUsa?: string;
+  consignatario?: string;
+  dniConsignatario?: string;
+  telefonoConsignatario?: string;
+  ciudadDestino?: string;
+  direccionDestino?: string;
+  ubicacionAnaquel: string;          // Ej: A1-P2
+  estadoItem: 'PENDIENTE' | 'RECOLECTADO';
+  recolectadoEn?: string;
+  recolectadoPor?: string;
+  pesoKg: number;
+  creadoEn?: string;
+}
+
+
 
