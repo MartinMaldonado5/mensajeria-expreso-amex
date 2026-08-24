@@ -205,16 +205,19 @@ export default function MobileScannerModal({
     }
   }, [vibrationEnabled]);
 
-  // Búsqueda 360° en tiempo real
+  // Búsqueda 360° en tiempo real (instantánea y no invasiva)
   const performLookup = useCallback((cleanCode: string) => {
-    const upper = cleanCode.toUpperCase();
+    const upper = cleanCode.trim().toUpperCase();
     const currentPackages = paquetesRef.current;
     const currentClients = clientesRef.current;
 
     const foundPkg = currentPackages.find(p =>
       p.numeroReciboBodega.toUpperCase() === upper ||
       p.trackingUsa.toUpperCase() === upper ||
-      p.codigoCasillero.toUpperCase() === upper
+      p.codigoCasillero.toUpperCase() === upper ||
+      p.dniConsignatario?.toUpperCase() === upper ||
+      (upper.length >= 4 && p.numeroReciboBodega.toUpperCase().includes(upper)) ||
+      (upper.length >= 6 && p.trackingUsa.toUpperCase().includes(upper))
     );
 
     const foundCli = currentClients.find(c =>
@@ -286,7 +289,15 @@ export default function MobileScannerModal({
       (foundPkg && c.codigoCasillero.toUpperCase() === foundPkg.codigoCasillero.toUpperCase())
     );
 
-    // 🛑 NO GUARDAR AUTOMÁTICAMENTE: Presentar diálogo de confirmación interactivo
+    // 🔍 SI EL MODO ES 'lookup' (Localizar 360°):
+    // DIRECTO E INSTANTÁNEO: Abrir Ficha 360° de inmediato sin pedir confirmación de guardado ni anaqueles.
+    if (activeWorkflow === 'lookup') {
+      performLookup(cleanCode);
+      setLastScannedCode({ code: cleanCode, time: now });
+      return;
+    }
+
+    // 🛑 Para modo 'slotting' o 'delivery': Presentar diálogo interactivo de confirmación antes de añadir a la cola local
     setPendingConfirmation({
       code: cleanCode,
       format,
@@ -298,7 +309,7 @@ export default function MobileScannerModal({
       cli: foundCli,
       detectedAt: now
     });
-  }, [playScanBeep, triggerHaptic]);
+  }, [playScanBeep, triggerHaptic, performLookup]);
 
   // ✅ Acción: Usuario Confirma el Código Escaneado (Persistencia en Memoria y Supabase)
   const handleConfirmScan = async (confirmedData: PendingConfirmationData) => {
@@ -1019,6 +1030,48 @@ export default function MobileScannerModal({
         </div>
       )}
 
+      {/* 🔍 BANNER INFORMATIVO MODO LOCALIZAR 360° */}
+      {workflowMode === 'lookup' && (
+        <div
+          style={{
+            background: 'linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)',
+            border: '1.5px solid #86efac',
+            borderRadius: '12px',
+            padding: '10px 14px',
+            marginBottom: '12px',
+            boxShadow: '0 2px 8px rgba(22,163,74,0.08)'
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#15803d', fontWeight: 800, fontSize: '12.5px' }}>
+            <Search className="w-4 h-4 text-green-600" /> Modo Consulta 360° Instantánea
+          </div>
+          <div style={{ fontSize: '11px', color: '#166534', marginTop: '2px', lineHeight: '1.4' }}>
+            Apunta a cualquier código o escríbelo para <strong>ver al instante en qué anaquel se encuentra</strong>, los datos del cliente y su estado, sin alterar su ubicación ni pedir confirmaciones de guardado.
+          </div>
+        </div>
+      )}
+
+      {/* 🚚 BANNER INFORMATIVO MODO DESPACHO */}
+      {workflowMode === 'delivery' && (
+        <div
+          style={{
+            background: 'linear-gradient(135deg, #faf5ff 0%, #f3e8ff 100%)',
+            border: '1.5px solid #d8b4fe',
+            borderRadius: '12px',
+            padding: '10px 14px',
+            marginBottom: '12px',
+            boxShadow: '0 2px 8px rgba(147,51,234,0.08)'
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#7e22ce', fontWeight: 800, fontSize: '12.5px' }}>
+            <Truck className="w-4 h-4 text-purple-600" /> Modo Despacho y Reparto
+          </div>
+          <div style={{ fontSize: '11px', color: '#6b21a8', marginTop: '2px', lineHeight: '1.4' }}>
+            Escanea paquetes para registrar salida a reparto local en Carro Amex o traslado a agencias (Olva/Shalom).
+          </div>
+        </div>
+      )}
+
       {/* Alerta de contexto seguro para móviles */}
       {!isSecureContextState && (
         <div
@@ -1599,7 +1652,7 @@ export default function MobileScannerModal({
                     </div>
                   )}
 
-                  <div style={{ display: 'flex', gap: '8px' }}>
+                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                     {lookupResult.cli?.telefono && (
                       <a
                         href={`https://wa.me/51${lookupResult.cli.telefono.replace(/\D/g, '')}?text=Hola%20${encodeURIComponent(lookupResult.cli.nombre)},%20te%20saludamos%20de%20AMEX%20Courier.%20Tu%20paquete%20${encodeURIComponent(lookupResult.pkg.numeroReciboBodega)}%20ya%20se%20encuentra%20listo%20en%20nuestro%20almac%C3%A9n%20(${encodeURIComponent(lookupResult.pkg.posicionEstante || 'A1-P1')}).`}
@@ -1608,6 +1661,7 @@ export default function MobileScannerModal({
                         className="btn btn-primary"
                         style={{
                           flex: 1,
+                          minWidth: '110px',
                           height: '38px',
                           background: '#16a34a',
                           fontSize: '12px',
@@ -1622,9 +1676,43 @@ export default function MobileScannerModal({
                       </a>
                     )}
                     <button
+                      onClick={() => {
+                        const code = lookupResult.pkg?.numeroReciboBodega || lookupResult.rawCode;
+                        setLookupResult(null);
+                        setWorkflowMode('slotting');
+                        setPendingConfirmation({
+                          code,
+                          format: 'CODE_128',
+                          workflow: 'slotting',
+                          location: `${selectedAnaquel}-${selectedPiso}`,
+                          anaquel: selectedAnaquel,
+                          piso: selectedPiso,
+                          pkg: lookupResult.pkg,
+                          cli: lookupResult.cli,
+                          detectedAt: Date.now()
+                        });
+                      }}
+                      className="btn"
+                      style={{
+                        flex: 1,
+                        minWidth: '110px',
+                        height: '38px',
+                        background: '#eff6ff',
+                        color: '#2563eb',
+                        border: '1.5px solid #bfdbfe',
+                        fontSize: '12px',
+                        fontWeight: 800,
+                        borderRadius: '8px',
+                        justifyContent: 'center',
+                        gap: '4px'
+                      }}
+                    >
+                      <Layers className="w-4 h-4" /> Reubicar
+                    </button>
+                    <button
                       onClick={() => setLookupResult(null)}
                       className="btn btn-secondary"
-                      style={{ height: '38px', flex: 1, fontSize: '12px', fontWeight: 700, borderRadius: '8px', justifyContent: 'center' }}
+                      style={{ height: '38px', minWidth: '70px', fontSize: '12px', fontWeight: 700, borderRadius: '8px', justifyContent: 'center' }}
                     >
                       Cerrar
                     </button>
@@ -1633,17 +1721,39 @@ export default function MobileScannerModal({
               ) : (
                 <div style={{ textAlign: 'center', padding: '16px 8px' }}>
                   <Package className="w-10 h-10 text-slate-300" style={{ margin: '0 auto 8px auto' }} />
-                  <p style={{ fontWeight: 800, color: '#0f172a', fontSize: '13px', margin: 0 }}>Código no encontrado</p>
-                  <p style={{ fontSize: '11.5px', color: '#64748b', margin: '4px 0 12px 0' }}>
-                    El código <code style={{ color: '#2563eb', fontWeight: 700 }}>{lookupResult.rawCode}</code> no coincide con ningún paquete registrado.
+                  <p style={{ fontWeight: 800, color: '#0f172a', fontSize: '13px', margin: 0 }}>Paquete no registrado en almacén</p>
+                  <p style={{ fontSize: '11.5px', color: '#64748b', margin: '4px 0 14px 0' }}>
+                    El código <code style={{ color: '#2563eb', fontWeight: 700 }}>{lookupResult.rawCode}</code> no se encuentra en el inventario activo.
                   </p>
-                  <button
-                    onClick={() => setLookupResult(null)}
-                    className="btn btn-primary"
-                    style={{ width: '100%', height: '36px', fontSize: '12px', borderRadius: '8px' }}
-                  >
-                    Entendido
-                  </button>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <button
+                      onClick={() => {
+                        const raw = lookupResult.rawCode;
+                        setLookupResult(null);
+                        setWorkflowMode('slotting');
+                        setPendingConfirmation({
+                          code: raw,
+                          format: 'CODE_128',
+                          workflow: 'slotting',
+                          location: `${selectedAnaquel}-${selectedPiso}`,
+                          anaquel: selectedAnaquel,
+                          piso: selectedPiso,
+                          detectedAt: Date.now()
+                        });
+                      }}
+                      className="btn btn-primary"
+                      style={{ height: '38px', fontSize: '12px', borderRadius: '8px', fontWeight: 800, justifyContent: 'center', gap: '6px' }}
+                    >
+                      <Plus className="w-4 h-4" /> Registrar en Anaquel {selectedAnaquel}-{selectedPiso}
+                    </button>
+                    <button
+                      onClick={() => setLookupResult(null)}
+                      className="btn btn-secondary"
+                      style={{ height: '36px', fontSize: '12px', borderRadius: '8px', justifyContent: 'center' }}
+                    >
+                      Entendido / Cerrar
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
@@ -1676,43 +1786,29 @@ export default function MobileScannerModal({
 
       {/* BARRA DE CONTROLES DE CÁMARA */}
       <div style={{ display: 'flex', gap: '8px', marginTop: '12px', flexWrap: 'wrap' }}>
-        {!isScanning ? (
-          <button
-            onClick={() => startCameraStream(selectedCameraId)}
-            className="btn btn-primary"
-            style={{
-              flex: 1,
-              minWidth: '150px',
-              height: '42px',
-              justifyContent: 'center',
-              fontSize: '12.5px',
-              borderRadius: '8px',
-              fontWeight: 800,
-              gap: '6px'
-            }}
-          >
-            <Camera className="w-4 h-4" /> Encender Cámara
-          </button>
-        ) : (
-          <button
-            onClick={stopCameraStream}
-            className="btn btn-secondary"
-            style={{
-              flex: 1,
-              minWidth: '150px',
-              height: '42px',
-              justifyContent: 'center',
-              fontSize: '12.5px',
-              background: '#fee2e2',
-              color: '#dc2626',
-              borderRadius: '8px',
-              fontWeight: 800,
-              gap: '6px'
-            }}
-          >
-            <VideoOff className="w-4 h-4" /> Apagar Cámara
-          </button>
-        )}
+        <button
+          onClick={isScanning ? stopCameraStream : () => startCameraStream(selectedCameraId)}
+          className={isScanning ? 'btn btn-secondary' : 'btn btn-primary'}
+          style={{
+            flex: 1,
+            height: '42px',
+            borderRadius: '8px',
+            fontWeight: 800,
+            fontSize: '12.5px',
+            justifyContent: 'center',
+            gap: '6px'
+          }}
+        >
+          {isScanning ? (
+            <>
+              <VideoOff className="w-4 h-4 text-red-500" /> Detener Cámara
+            </>
+          ) : (
+            <>
+              <Camera className="w-4 h-4" /> Encender Cámara
+            </>
+          )}
+        </button>
 
         <input
           type="file"
@@ -1727,14 +1823,12 @@ export default function MobileScannerModal({
           disabled={isProcessingImage}
           className="btn btn-secondary"
           style={{
-            flex: 1,
-            minWidth: '140px',
             height: '42px',
-            justifyContent: 'center',
-            fontSize: '12.5px',
             borderRadius: '8px',
-            fontWeight: 800,
-            gap: '6px'
+            fontWeight: 700,
+            fontSize: '12px',
+            gap: '6px',
+            padding: '0 12px'
           }}
           title="Tomar foto con la cámara nativa del celular o subir imagen"
         >
@@ -1916,7 +2010,7 @@ export default function MobileScannerModal({
                   </div>
                 )}
 
-                {/* Botón Procesar */}
+                {/* Botón Procesar Dinámico según Modo */}
                 <button
                   type="submit"
                   disabled={!manualDigits.trim()}
@@ -1928,12 +2022,24 @@ export default function MobileScannerModal({
                     borderRadius: '0',
                     fontWeight: 800,
                     gap: '4px',
-                    background: manualDigits.trim() ? '#16a34a' : '#94a3b8',
-                    borderColor: manualDigits.trim() ? '#15803d' : '#94a3b8',
+                    background: !manualDigits.trim() ? '#94a3b8' : workflowMode === 'lookup' ? '#2563eb' : workflowMode === 'delivery' ? '#9333ea' : '#16a34a',
+                    borderColor: !manualDigits.trim() ? '#94a3b8' : workflowMode === 'lookup' ? '#1d4ed8' : workflowMode === 'delivery' ? '#7e22ce' : '#15803d',
                     cursor: manualDigits.trim() ? 'pointer' : 'not-allowed'
                   }}
                 >
-                  <Plus className="w-4 h-4" /> Procesar
+                  {workflowMode === 'lookup' ? (
+                    <>
+                      <Search className="w-4 h-4" /> Consultar
+                    </>
+                  ) : workflowMode === 'delivery' ? (
+                    <>
+                      <Truck className="w-4 h-4" /> Despachar
+                    </>
+                  ) : (
+                    <>
+                      <Plus className="w-4 h-4" /> Asignar
+                    </>
+                  )}
                 </button>
               </div>
 
@@ -1987,10 +2093,24 @@ export default function MobileScannerModal({
                   borderRadius: '8px',
                   fontWeight: 800,
                   gap: '4px',
+                  background: !manualCodeInput.trim() ? '#94a3b8' : workflowMode === 'lookup' ? '#2563eb' : workflowMode === 'delivery' ? '#9333ea' : '#16a34a',
+                  borderColor: !manualCodeInput.trim() ? '#94a3b8' : workflowMode === 'lookup' ? '#1d4ed8' : workflowMode === 'delivery' ? '#7e22ce' : '#15803d',
                   opacity: manualCodeInput.trim() ? 1 : 0.6
                 }}
               >
-                <Plus className="w-3.5 h-3.5" /> Procesar
+                {workflowMode === 'lookup' ? (
+                  <>
+                    <Search className="w-3.5 h-3.5" /> Consultar
+                  </>
+                ) : workflowMode === 'delivery' ? (
+                  <>
+                    <Truck className="w-3.5 h-3.5" /> Despachar
+                  </>
+                ) : (
+                  <>
+                    <Plus className="w-3.5 h-3.5" /> Asignar
+                  </>
+                )}
               </button>
             </div>
           )}
