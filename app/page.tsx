@@ -5,7 +5,6 @@ import { Paquete, Cliente, TipoUbicacion, TipoMetodoEntrega, TipoEstadoEntrega, 
 import { supabase } from '@/lib/supabase/client';
 import HeaderBar from '@/components/HeaderBar';
 import Sidebar from '@/components/Sidebar';
-import MobileBottomNav from '@/components/MobileBottomNav';
 import DashboardTab from '@/components/tabs/DashboardTab';
 import CustomersTab from '@/components/tabs/CustomersTab';
 import DniTab from '@/components/tabs/DniTab';
@@ -606,13 +605,6 @@ export default function DashboardPage() {
         />
       )}
 
-      {/* Barra de Navegación Rápida Móvil (Inferior) */}
-      <MobileBottomNav
-        activeTab={activeTab}
-        isSidebarOpen={!isSidebarCollapsed}
-        onSelectTab={setActiveTab}
-        onToggleSidebar={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-      />
 
       {isNewClientModalOpen && (
         <NewClientModal
