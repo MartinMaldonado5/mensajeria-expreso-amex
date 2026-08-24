@@ -33,6 +33,7 @@ import {
   Grid
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
+import { TableSkeleton, MatrixSkeleton } from '@/components/ui/Skeleton';
 
 interface InventoryTabProps {
   paquetes: Paquete[];
@@ -1471,72 +1472,76 @@ export default function InventoryTab({
             </div>
           </div>
 
-          <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '12px', overflow: 'hidden' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12.5px', textAlign: 'left' }}>
-              <thead>
-                <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', color: '#475569', fontWeight: 800 }}>
-                  <th style={{ padding: '10px 14px' }}>Fecha & Hora</th>
-                  <th style={{ padding: '10px 14px' }}>Paquete / Guía</th>
-                  <th style={{ padding: '10px 14px' }}>Consignatario</th>
-                  <th style={{ padding: '10px 14px' }}>Origen ➔ Destino</th>
-                  <th style={{ padding: '10px 14px' }}>Tipo & Motivo</th>
-                  <th style={{ padding: '10px 14px' }}>Operador Responsable</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredKardex.length === 0 ? (
-                  <tr>
-                    <td colSpan={6} style={{ textAlign: 'center', padding: '32px', color: '#94a3b8' }}>
-                      <Clock style={{ width: '36px', height: '36px', margin: '0 auto 8px auto', color: '#cbd5e1' }} />
-                      <div style={{ fontWeight: 800, color: '#64748b' }}>No hay registros de Kardex coincidentes</div>
-                    </td>
+          {isLoadingKardex ? (
+            <TableSkeleton rows={6} columns={6} />
+          ) : (
+            <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '12px', overflow: 'hidden' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12.5px', textAlign: 'left' }}>
+                <thead>
+                  <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', color: '#475569', fontWeight: 800 }}>
+                    <th style={{ padding: '10px 14px' }}>Fecha & Hora</th>
+                    <th style={{ padding: '10px 14px' }}>Paquete / Guía</th>
+                    <th style={{ padding: '10px 14px' }}>Consignatario</th>
+                    <th style={{ padding: '10px 14px' }}>Origen ➔ Destino</th>
+                    <th style={{ padding: '10px 14px' }}>Tipo & Motivo</th>
+                    <th style={{ padding: '10px 14px' }}>Operador Responsable</th>
                   </tr>
-                ) : (
-                  filteredKardex.map(mov => (
-                    <tr key={mov.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                      <td style={{ padding: '10px 14px', color: '#64748b', fontSize: '12px' }}>
-                        {new Date(mov.creadoEn).toLocaleString()}
-                      </td>
-                      <td style={{ padding: '10px 14px', fontWeight: 800, fontFamily: 'monospace', color: '#2563eb' }}>
-                        {mov.codigoPaquete}
-                      </td>
-                      <td style={{ padding: '10px 14px', color: '#0f172a', fontWeight: 600 }}>
-                        {mov.consignatario || '-'}
-                      </td>
-                      <td style={{ padding: '10px 14px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px' }}>
-                          <span style={{ color: '#dc2626', fontWeight: 700 }}>{mov.origenDescripcion}</span>
-                          <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
-                          <span style={{ color: '#16a34a', fontWeight: 700 }}>{mov.destinoDescripcion}</span>
-                        </div>
-                      </td>
-                      <td style={{ padding: '10px 14px', color: '#334155' }}>
-                        <span
-                          style={{
-                            fontSize: '10px',
-                            fontWeight: 800,
-                            padding: '2px 6px',
-                            borderRadius: '4px',
-                            background: '#eff6ff',
-                            color: '#1e40af',
-                            marginRight: '6px'
-                          }}
-                        >
-                          {mov.tipoMovimiento}
-                        </span>
-                        {mov.motivo}
-                      </td>
-                      <td style={{ padding: '10px 14px', color: '#64748b', fontSize: '11.5px', fontWeight: 700 }}>
-                        <span style={{ background: '#f1f5f9', padding: '3px 8px', borderRadius: '4px' }}>
-                          {mov.usuarioOperador}
-                        </span>
+                </thead>
+                <tbody>
+                  {filteredKardex.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} style={{ textAlign: 'center', padding: '32px', color: '#94a3b8' }}>
+                        <Clock style={{ width: '36px', height: '36px', margin: '0 auto 8px auto', color: '#cbd5e1' }} />
+                        <div style={{ fontWeight: 800, color: '#64748b' }}>No hay registros de Kardex coincidentes</div>
                       </td>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+                  ) : (
+                    filteredKardex.map(mov => (
+                      <tr key={mov.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                        <td style={{ padding: '10px 14px', color: '#64748b', fontSize: '12px' }}>
+                          {new Date(mov.creadoEn).toLocaleString()}
+                        </td>
+                        <td style={{ padding: '10px 14px', fontWeight: 800, fontFamily: 'monospace', color: '#2563eb' }}>
+                          {mov.codigoPaquete}
+                        </td>
+                        <td style={{ padding: '10px 14px', color: '#0f172a', fontWeight: 600 }}>
+                          {mov.consignatario || '-'}
+                        </td>
+                        <td style={{ padding: '10px 14px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px' }}>
+                            <span style={{ color: '#dc2626', fontWeight: 700 }}>{mov.origenDescripcion}</span>
+                            <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+                            <span style={{ color: '#16a34a', fontWeight: 700 }}>{mov.destinoDescripcion}</span>
+                          </div>
+                        </td>
+                        <td style={{ padding: '10px 14px', color: '#334155' }}>
+                          <span
+                            style={{
+                              fontSize: '10px',
+                              fontWeight: 800,
+                              padding: '2px 6px',
+                              borderRadius: '4px',
+                              background: '#eff6ff',
+                              color: '#1e40af',
+                              marginRight: '6px'
+                            }}
+                          >
+                            {mov.tipoMovimiento}
+                          </span>
+                          {mov.motivo}
+                        </td>
+                        <td style={{ padding: '10px 14px', color: '#64748b', fontSize: '11.5px', fontWeight: 700 }}>
+                          <span style={{ background: '#f1f5f9', padding: '3px 8px', borderRadius: '4px' }}>
+                            {mov.usuarioOperador}
+                          </span>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
 

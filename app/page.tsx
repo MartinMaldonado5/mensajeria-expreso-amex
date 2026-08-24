@@ -18,6 +18,7 @@ import NewPackageModal, { NewPkgFormData } from '@/components/modals/NewPackageM
 import ThermalLabelModal from '@/components/modals/ThermalLabelModal';
 import PdfViewerModal from '@/components/modals/PdfViewerModal';
 import DniImageModal from '@/components/modals/DniImageModal';
+import { PageSkeleton } from '@/components/ui/Skeleton';
 
 const NOMBRES = ["María", "Carlos", "Juan", "Ana", "Luis", "Rosa", "Pedro", "Lucía", "Diego", "Carmen", "Jorge", "Patricia", "Fernando", "Sofía", "Gabriel", "Elena", "Ronaldo", "Valeria", "Mateo", "Camila"];
 const APELLIDOS = ["Torres", "Pérez", "Mendoza", "Ramos", "García", "Flores", "Rodríguez", "Sánchez", "Gómez", "Díaz", "Vásquez", "Castro", "Romero", "Alvarez", "Gutierrez", "Navarro", "Salazar", "Castillo", "Vargas", "Guerrero"];
@@ -167,6 +168,7 @@ export default function DashboardPage() {
   const [selectedThermalPkg, setSelectedThermalPkg] = useState<Paquete | null>(null);
   const [isNewClientModalOpen, setIsNewClientModalOpen] = useState(false);
   const [isNewPkgModalOpen, setIsNewPkgModalOpen] = useState(false);
+  const [isLoadingInitialData, setIsLoadingInitialData] = useState(true);
 
   const [newClientForm, setNewClientForm] = useState<NewClientFormData>(EMPTY_CLIENT_FORM);
   const [newPkgForm, setNewPkgForm] = useState<NewPkgFormData>(EMPTY_PKG_FORM);
@@ -230,6 +232,8 @@ export default function DashboardPage() {
         }
       } catch (err) {
         console.warn('Supabase initial fetch sync:', err);
+      } finally {
+        setIsLoadingInitialData(false);
       }
     }
 
@@ -517,17 +521,21 @@ export default function DashboardPage() {
         />
 
         <main className="main-content">
-          {activeTab === 'dashboard' && (
-            <DashboardTab
-              clientes={clientes}
-              paquetes={paquetes}
-              filteredPaquetes={paquetes}
-              onNewClient={() => setIsNewClientModalOpen(true)}
-              onNewPackage={openNewPkgModal}
-              onPrintLabel={setSelectedThermalPkg}
-              onViewPdf={setSelectedPdfUrl}
-            />
-          )}
+          {isLoadingInitialData ? (
+            <PageSkeleton />
+          ) : (
+            <>
+              {activeTab === 'dashboard' && (
+                <DashboardTab
+                  clientes={clientes}
+                  paquetes={paquetes}
+                  filteredPaquetes={paquetes}
+                  onNewClient={() => setIsNewClientModalOpen(true)}
+                  onNewPackage={openNewPkgModal}
+                  onPrintLabel={setSelectedThermalPkg}
+                  onViewPdf={setSelectedPdfUrl}
+                />
+              )}
 
           {activeTab === 'sd-customers' && (
             <CustomersTab
@@ -615,6 +623,8 @@ export default function DashboardPage() {
               onConfirm={handleScanCode}
               onSlotPackage={handleAssignPackageLocation}
             />
+          )}
+            </>
           )}
         </main>
       </div>

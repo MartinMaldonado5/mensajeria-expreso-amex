@@ -901,3 +901,55 @@ tr:hover { background: #f8fafc !important; }
   border-radius: 8px !important;
 }
 
+/* ==========================================================================
+   LENIS SMOOTH SCROLLING
+   ========================================================================== */
+html.lenis, html.lenis body {
+  height: auto;
+}
+
+.lenis.lenis-smooth {
+  scroll-behavior: auto !important;
+}
+
+.lenis.lenis-smooth [data-lenis-prevent] {
+  overscroll-behavior: contain;
+}
+
+.lenis.lenis-stopped {
+  overflow: hidden;
+}
+
+.lenis.lenis-smooth iframe {
+  pointer-events: none;
+}
+
+/* ==========================================================================
+   PROFESSIONAL SKELETON SHIMMER EFFECT
+   ========================================================================== */
+@keyframes shimmerPulse {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.skeleton-shimmer {
+  background: linear-gradient(
+    90deg,
+    #f1f5f9 0%,
+    #e2e8f0 35%,
+    #cbd5e1 50%,
+    #e2e8f0 65%,
+    #f1f5f9 100%
+  ) !important;
+  background-size: 300% 100% !important;
+  animation: shimmerPulse 1.8s cubic-bezier(0.4, 0, 0.2, 1) infinite !important;
+  pointer-events: none;
+  user-select: none;
+  display: block;
+}
+
+
