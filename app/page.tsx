@@ -125,7 +125,7 @@ const EMPTY_PKG_FORM: NewPkgFormData = {
 };
 
 export default function DashboardPage() {
-  const [activeTab, setActiveTabState] = useState<string>('dashboard');
+  const [activeTab, setActiveTabState] = useState<string>('mm-inventory');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
   useEffect(() => {

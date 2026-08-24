@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 
 interface SidebarProps {
   activeTab: string;
@@ -14,17 +14,10 @@ interface SidebarProps {
 export default function Sidebar({
   activeTab,
   isSidebarCollapsed,
-  collapsedGroups,
   onSelectTab,
-  onToggleGroup,
   onCloseSidebar
 }: SidebarProps) {
-  const groupHeader = (group: string, icon: string, label: string) => (
-    <div className="sap-module-header" onClick={() => onToggleGroup(group)}>
-      <span><i className={icon}></i> {label}</span>
-      <i className={`fa-solid fa-chevron-down arrow ${collapsedGroups[group] ? 'rotate--90' : ''}`}></i>
-    </div>
-  );
+  const [showOtherModules, setShowOtherModules] = useState(false);
 
   const navItem = (tab: string, icon: string, label: string) => (
     <div
@@ -32,6 +25,12 @@ export default function Sidebar({
       onClick={() => onSelectTab(tab)}
       role="button"
       tabIndex={0}
+      style={{
+        borderRadius: '8px',
+        padding: '10px 14px',
+        fontSize: '13px',
+        fontWeight: activeTab === tab ? 700 : 600
+      }}
     >
       <div className="nav-item-left"><i className={icon}></i> {label}</div>
     </div>
@@ -42,7 +41,7 @@ export default function Sidebar({
       {/* Encabezado Móvil con Botón Cerrar */}
       <div className="sidebar-mobile-header">
         <span style={{ fontSize: '13px', fontWeight: 800, color: '#f8fafc', display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <i className="fa-solid fa-layer-group" style={{ color: '#38bdf8' }}></i> Módulos del Sistema
+          <i className="fa-solid fa-boxes-stacked" style={{ color: '#38bdf8' }}></i> Operaciones & Almacenes
         </span>
         <button
           onClick={onCloseSidebar}
@@ -66,56 +65,115 @@ export default function Sidebar({
         </button>
       </div>
 
-      {/* 1.0 LAUNCHPAD */}
-      <div className="sap-module-group">
-        {groupHeader('dashboard', 'fa-solid fa-cubes', 'Panel Principal')}
-        {!collapsedGroups.dashboard && (
-          <div className="sap-sub-menu">
+      {/* ⭐️ SECCIÓN PRINCIPAL Y ÚNICA DESTACADA: OPERACIONES Y ALMACENES */}
+      <div className="sap-module-group" style={{ marginBottom: '12px' }}>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '10px 12px',
+            background: 'linear-gradient(135deg, rgba(37, 99, 235, 0.28) 0%, rgba(30, 64, 175, 0.28) 100%)',
+            border: '1.5px solid rgba(59, 130, 246, 0.5)',
+            borderRadius: '8px',
+            color: '#ffffff',
+            fontWeight: 800,
+            fontSize: '12px',
+            letterSpacing: '0.5px',
+            marginBottom: '8px',
+            textTransform: 'uppercase',
+            boxShadow: '0 2px 8px rgba(37, 99, 235, 0.15)'
+          }}
+        >
+          <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <i className="fa-solid fa-warehouse" style={{ color: '#38bdf8' }}></i> Operaciones y Almacenes
+          </span>
+          <span style={{ fontSize: '9.5px', background: '#2563eb', color: '#ffffff', padding: '2px 6px', borderRadius: '4px', fontWeight: 800 }}>
+            ACTIVO
+          </span>
+        </div>
+
+        <div className="sap-sub-menu" style={{ paddingLeft: '2px', display: 'flex', flexDirection: 'column', gap: '3px' }}>
+          {navItem('mm-inventory', 'fa-solid fa-boxes-stacked', '📦 Inventario & Movimientos WMS')}
+          {navItem('mobile-scanner', 'fa-solid fa-barcode', '📱 Escáner de Códigos')}
+          {navItem('mm-lince', 'fa-solid fa-store', '🏢 Almacén Central (Lince)')}
+          {navItem('mm-miami', 'fa-solid fa-plane-departure', '✈️ Almacén Miami (USA)')}
+          {navItem('mm-tingo', 'fa-solid fa-dolly', '🌴 Almacén Tingo María')}
+        </div>
+      </div>
+
+      {/* 📁 SECCIÓN ÚNICA COLAPSABLE: TODOS LOS DEMÁS MÓDULOS OCULTOS */}
+      <div
+        className="sap-module-group"
+        style={{
+          marginTop: 'auto',
+          paddingTop: '12px',
+          borderTop: '1px solid rgba(255, 255, 255, 0.1)'
+        }}
+      >
+        <div
+          onClick={() => setShowOtherModules(!showOtherModules)}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '10px 12px',
+            background: showOtherModules ? 'rgba(255, 255, 255, 0.08)' : 'rgba(255, 255, 255, 0.03)',
+            border: '1px solid rgba(255, 255, 255, 0.12)',
+            borderRadius: '8px',
+            color: '#94a3b8',
+            fontWeight: 700,
+            fontSize: '11.5px',
+            cursor: 'pointer',
+            transition: 'all 0.2s ease',
+            textTransform: 'uppercase',
+            letterSpacing: '0.4px',
+            userSelect: 'none'
+          }}
+          title={showOtherModules ? 'Ocultar otros módulos' : 'Mostrar otros módulos del sistema'}
+        >
+          <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <i className="fa-solid fa-folder-tree" style={{ color: '#94a3b8' }}></i> Otros Módulos ({showOtherModules ? 'Abierto' : 'Ocultos'})
+          </span>
+          <i className={`fa-solid fa-chevron-down arrow ${!showOtherModules ? 'rotate--90' : ''}`} style={{ fontSize: '11px', transition: 'transform 0.2s ease' }}></i>
+        </div>
+
+        {showOtherModules && (
+          <div
+            style={{
+              marginTop: '8px',
+              padding: '8px',
+              background: 'rgba(15, 23, 42, 0.75)',
+              borderRadius: '8px',
+              border: '1px solid rgba(255, 255, 255, 0.08)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '4px'
+            }}
+          >
+            {/* 1. Panel General */}
+            <div style={{ fontSize: '10px', color: '#64748b', fontWeight: 800, padding: '4px 6px 0 6px', textTransform: 'uppercase' }}>
+              📊 Panel General
+            </div>
             {navItem('dashboard', 'fa-solid fa-chart-pie', 'Resumen & Métricas')}
-          </div>
-        )}
-      </div>
 
-      {/* 2.0 GESTIÓN DE CLIENTES */}
-      <div className="sap-module-group">
-        {groupHeader('clientes', 'fa-solid fa-users', 'Gestión de Clientes')}
-        {!collapsedGroups.clientes && (
-          <div className="sap-sub-menu">
+            {/* 2. Clientes */}
+            <div style={{ fontSize: '10px', color: '#64748b', fontWeight: 800, padding: '6px 6px 0 6px', textTransform: 'uppercase' }}>
+              👥 Clientes
+            </div>
             {navItem('sd-customers', 'fa-solid fa-address-book', 'Directorio de Casilleros')}
-            {navItem('sd-dni', 'fa-solid fa-id-card', 'Expedientes DNI Digital')}
-          </div>
-        )}
-      </div>
+            {navItem('sd-dni', 'fa-solid fa-id-card', 'Expedientes DNI')}
 
-      {/* 3.0 OPERACIONES Y ALMACENES */}
-      <div className="sap-module-group">
-        {groupHeader('almacenes', 'fa-solid fa-warehouse', 'Operaciones y Almacenes')}
-        {!collapsedGroups.almacenes && (
-          <div className="sap-sub-menu">
-            {navItem('mm-inventory', 'fa-solid fa-boxes-stacked', '📦 Inventario & Movimientos WMS')}
-            {navItem('mm-miami', 'fa-solid fa-plane-departure', '1. Almacén Miami (USA)')}
-            {navItem('mm-tingo', 'fa-solid fa-dolly', '2. Almacén Tingo María')}
-            {navItem('mm-lince', 'fa-solid fa-store', '3. Almacén Sede Lince')}
-            {navItem('mobile-scanner', 'fa-solid fa-barcode', '📱 Escáner de Códigos')}
-          </div>
-        )}
-      </div>
+            {/* 3. Despacho */}
+            <div style={{ fontSize: '10px', color: '#64748b', fontWeight: 800, padding: '6px 6px 0 6px', textTransform: 'uppercase' }}>
+              🚚 Despacho
+            </div>
+            {navItem('shp-deliveries', 'fa-solid fa-car-side', 'Reparto Carro Amex')}
 
-      {/* 4.0 DESPACHO Y REPARTO */}
-      <div className="sap-module-group">
-        {groupHeader('despacho', 'fa-solid fa-truck-fast', 'Despacho y Reparto')}
-        {!collapsedGroups.despacho && (
-          <div className="sap-sub-menu">
-            {navItem('shp-deliveries', 'fa-solid fa-car-side', 'Reparto Carro Amex & Entregas')}
-          </div>
-        )}
-      </div>
-
-      {/* 5.0 LIQUIDACIONES Y FINANZAS */}
-      <div className="sap-module-group">
-        {groupHeader('finanzas', 'fa-solid fa-file-invoice-dollar', 'Liquidaciones y Finanzas')}
-        {!collapsedGroups.finanzas && (
-          <div className="sap-sub-menu">
+            {/* 4. Finanzas */}
+            <div style={{ fontSize: '10px', color: '#64748b', fontWeight: 800, padding: '6px 6px 0 6px', textTransform: 'uppercase' }}>
+              💵 Finanzas
+            </div>
             {navItem('fico-liquidations', 'fa-solid fa-coins', 'Liquidaciones & Cobranzas')}
           </div>
         )}

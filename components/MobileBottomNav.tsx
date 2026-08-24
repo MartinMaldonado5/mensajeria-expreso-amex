@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { LayoutDashboard, Users, Barcode, PlaneTakeoff, Menu } from 'lucide-react';
+import { Boxes, Barcode, Store, PlaneTakeoff, Menu } from 'lucide-react';
 
 interface MobileBottomNavProps {
   activeTab: string;
@@ -18,26 +18,26 @@ export default function MobileBottomNav({
 }: MobileBottomNavProps) {
   return (
     <nav className="mobile-bottom-nav" aria-label="Navegación inferior móvil">
-      {/* 1. Dashboard */}
+      {/* 1. Inventario WMS */}
       <button
         type="button"
-        className={`mobile-nav-btn ${activeTab === 'dashboard' ? 'active' : ''}`}
-        onClick={() => onSelectTab('dashboard')}
-        aria-label="Ir a Inicio"
+        className={`mobile-nav-btn ${activeTab === 'mm-inventory' ? 'active' : ''}`}
+        onClick={() => onSelectTab('mm-inventory')}
+        aria-label="Ir a Inventario WMS"
       >
-        <LayoutDashboard className="w-5 h-5" />
-        <span>Inicio</span>
+        <Boxes className="w-5 h-5" />
+        <span>Inventario</span>
       </button>
 
-      {/* 2. Clientes */}
+      {/* 2. Sede Lince */}
       <button
         type="button"
-        className={`mobile-nav-btn ${activeTab === 'sd-customers' ? 'active' : ''}`}
-        onClick={() => onSelectTab('sd-customers')}
-        aria-label="Ir a Clientes"
+        className={`mobile-nav-btn ${activeTab === 'mm-lince' ? 'active' : ''}`}
+        onClick={() => onSelectTab('mm-lince')}
+        aria-label="Ir a Almacén Central Lince"
       >
-        <Users className="w-5 h-5" />
-        <span>Clientes</span>
+        <Store className="w-5 h-5" />
+        <span>Lince</span>
       </button>
 
       {/* 3. Escáner Principal (Botón Central Destacado) */}
