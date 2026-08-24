@@ -366,6 +366,18 @@ export default function MobileScannerModal({
           ubicacion: targetLocation,
           operador: 'Operador Logístico AMEX'
         });
+
+        // 4. Registrar en Kardex de Movimientos Inmutable
+        await supabase.from('movimientos_kardex').insert({
+          paquete_id: pkg ? pkg.id : null,
+          codigo_paquete: pkg ? pkg.numeroReciboBodega : code,
+          consignatario: cli ? cli.nombre : (pkg ? pkg.nombreConsignatario : 'Cliente AMEX'),
+          origen_descripcion: pkg ? `${pkg.ubicacionActual} (${pkg.posicionEstante || 'REC'})` : 'Recepción Escáner',
+          destino_descripcion: `AmexLince (${targetLocation})`,
+          tipo_movimiento: 'SLOTTING',
+          motivo: `Clasificación y Slotting Escáner a estante ${targetLocation}`,
+          usuario_operador: 'Operador Logístico AMEX'
+        });
       } catch (err) {
         console.warn('Error saving scan to Supabase:', err);
       }

@@ -96,3 +96,42 @@ export interface UsuarioSession {
   permisosPersonalizados?: string;
   activo: boolean;
 }
+
+export interface AlmacenSede {
+  id: string;
+  codigo: string;                    // MIA, LIN, TGO
+  nombre: string;
+  tipo?: string;                     // HUB_INTERNACIONAL, CENTRAL_DISTRIBUCION, SUCURSAL_REGIONAL
+  direccion?: string;
+  ciudad?: string;
+  pais?: string;
+  esActivo: boolean;
+  creadoEn?: string;
+}
+
+export interface EstanteriaPosicion {
+  id: string;
+  almacenId: string;
+  codigoEstante: string;             // A1, A2, A3, REC, DSP
+  nivelPiso: string;                 // P1, P2, P3, P4
+  codigoPosicion: string;            // A1-P1, A1-P2, A2-P1...
+  zonaTipo: string;                  // ALMACENAJE, RECEPCION, DESPACHO, DEVOLUCION
+  capacidadMaxPaquetes: number;
+  pesoMaxKg: number;
+  descripcion?: string;
+  creadoEn?: string;
+}
+
+export interface MovimientoKardex {
+  id: string;
+  paqueteId?: string;
+  codigoPaquete: string;             // WR-000451
+  consignatario?: string;
+  origenDescripcion: string;
+  destinoDescripcion: string;
+  tipoMovimiento: string;            // RECEPCION, SLOTTING, REUBICACION, DESPACHO, ENTREGA
+  motivo?: string;
+  usuarioOperador: string;
+  creadoEn: string;
+}
+

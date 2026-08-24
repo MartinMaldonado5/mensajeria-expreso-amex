@@ -7,8 +7,50 @@ export type Json =
   | Json[]
 
 export type Database = {
+  __InternalSupabase: {
+    PostgrestVersion: "14.15"
+  }
   public: {
     Tables: {
+      almacenes_sedes: {
+        Row: {
+          actualizado_en: string | null
+          ciudad: string | null
+          codigo: string
+          creado_en: string | null
+          direccion: string | null
+          es_activo: boolean | null
+          id: string
+          nombre: string
+          pais: string | null
+          tipo: string | null
+        }
+        Insert: {
+          actualizado_en?: string | null
+          ciudad?: string | null
+          codigo: string
+          creado_en?: string | null
+          direccion?: string | null
+          es_activo?: boolean | null
+          id?: string
+          nombre: string
+          pais?: string | null
+          tipo?: string | null
+        }
+        Update: {
+          actualizado_en?: string | null
+          ciudad?: string | null
+          codigo?: string
+          creado_en?: string | null
+          direccion?: string | null
+          es_activo?: boolean | null
+          id?: string
+          nombre?: string
+          pais?: string | null
+          tipo?: string | null
+        }
+        Relationships: []
+      }
       clientes: {
         Row: {
           actualizado_en: string | null
@@ -149,6 +191,56 @@ export type Database = {
           }
         ]
       }
+      estanterias_posiciones: {
+        Row: {
+          actualizado_en: string | null
+          almacen_id: string | null
+          capacidad_max_paquetes: number | null
+          codigo_estante: string
+          codigo_posicion: string
+          creado_en: string | null
+          descripcion: string | null
+          id: string
+          nivel_piso: string
+          peso_max_kg: number | null
+          zona_tipo: string | null
+        }
+        Insert: {
+          actualizado_en?: string | null
+          almacen_id?: string | null
+          capacidad_max_paquetes?: number | null
+          codigo_estante: string
+          codigo_posicion: string
+          creado_en?: string | null
+          descripcion?: string | null
+          id?: string
+          nivel_piso: string
+          peso_max_kg?: number | null
+          zona_tipo?: string | null
+        }
+        Update: {
+          actualizado_en?: string | null
+          almacen_id?: string | null
+          capacidad_max_paquetes?: number | null
+          codigo_estante?: string
+          codigo_posicion?: string
+          creado_en?: string | null
+          descripcion?: string | null
+          id?: string
+          nivel_piso?: string
+          peso_max_kg?: number | null
+          zona_tipo?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "estanterias_posiciones_almacen_id_fkey"
+            columns: ["almacen_id"]
+            isOneToOne: false
+            referencedRelation: "almacenes_sedes"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
       historial_trazabilidad: {
         Row: {
           descripcion_evento: string
@@ -177,6 +269,53 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "historial_trazabilidad_paquete_id_fkey"
+            columns: ["paquete_id"]
+            isOneToOne: false
+            referencedRelation: "paquetes"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      movimientos_kardex: {
+        Row: {
+          codigo_paquete: string
+          consignatario: string | null
+          creado_en: string | null
+          destino_descripcion: string
+          id: string
+          motivo: string | null
+          origen_descripcion: string
+          paquete_id: string | null
+          tipo_movimiento: string
+          usuario_operador: string | null
+        }
+        Insert: {
+          codigo_paquete: string
+          consignatario?: string | null
+          creado_en?: string | null
+          destino_descripcion: string
+          id?: string
+          motivo?: string | null
+          origen_descripcion: string
+          paquete_id?: string | null
+          tipo_movimiento: string
+          usuario_operador?: string | null
+        }
+        Update: {
+          codigo_paquete?: string
+          consignatario?: string | null
+          creado_en?: string | null
+          destino_descripcion?: string
+          id?: string
+          motivo?: string | null
+          origen_descripcion?: string
+          paquete_id?: string | null
+          tipo_movimiento?: string
+          usuario_operador?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "movimientos_kardex_paquete_id_fkey"
             columns: ["paquete_id"]
             isOneToOne: false
             referencedRelation: "paquetes"
@@ -336,46 +475,18 @@ export type Database = {
           }
         ]
       }
-      usuarios: {
-        Row: {
-          activo: boolean | null
-          creado_en: string | null
-          email: string
-          id: string
-          nombre_completo: string
-          password_hash: string
-          permisos_personalizados: string | null
-          rol: string
-          usuario: string
-        }
-        Insert: {
-          activo?: boolean | null
-          creado_en?: string | null
-          email: string
-          id?: string
-          nombre_completo: string
-          password_hash: string
-          permisos_personalizados?: string | null
-          rol: string
-          usuario: string
-        }
-        Update: {
-          activo?: boolean | null
-          creado_en?: string | null
-          email?: string
-          id?: string
-          nombre_completo?: string
-          password_hash?: string
-          permisos_personalizados?: string | null
-          rol?: string
-          usuario?: string
-        }
-        Relationships: []
-      }
     }
-    Views: Record<string, never>
-    Functions: Record<string, never>
-    Enums: Record<string, never>
-    CompositeTypes: Record<string, never>
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      [_ in never]: never
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
   }
 }
