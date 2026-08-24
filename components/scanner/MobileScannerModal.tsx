@@ -312,85 +312,32 @@ export default function MobileScannerModal({
         onSlotPackageRef.current(code, targetLocation);
       }
       if (onConfirmRef.current) {
-        onConfirmRef.current(code, format, { mode: 'slotting', location: targetLocation });
-      }
-
-      // 💾 Guardado directo en Supabase (Postgres)
-      try {
-        const upper = code.trim().toUpperCase();
-        if (pkg) {
-          // 1. Paquete existente: actualizar posición de anaquel y piso
-          await supabase
-            .from('paquetes')
-            .update({
-              anaquel: anaquel,
-              piso: piso,
-              posicion_estante: targetLocation,
-              ubicacion_actual: 'AmexLince'
-            })
-            .eq('id', pkg.id);
-
-          await supabase.from('historial_trazabilidad').insert({
-            paquete_id: pkg.id,
-            ubicacion: targetLocation,
-            descripcion_evento: `Escaneado y asignado a estantería: ${targetLocation}`,
-            usuario_operador: 'Operador Logístico AMEX'
-          });
-        } else {
-          // 2. Paquete nuevo: registrar automáticamente en tabla paquetes
-          const newWr = upper.startsWith('WR-') ? upper : `WR-${upper.slice(-6)}`;
-          await supabase.from('paquetes').insert({
-            codigo_casillero: cli ? cli.codigoCasillero : 'AMEX-PER-1001',
-            numero_recibo_bodega: newWr,
-            tracking_usa: upper,
-            tipo_empaque: 'CAJA',
-            dni_consignatario: cli ? cli.documentoIdentidad : '',
-            nombre_consignatario: cli ? cli.nombre : 'Cliente AMEX',
-            descripcion: 'Mercadería ingresada por Escáner',
-            peso_kg: 1.0,
-            valor_declarado_usd: 50.0,
-            ubicacion_actual: 'AmexLince',
-            anaquel: anaquel,
-            piso: piso,
-            posicion_estante: targetLocation,
-            metodo_entrega: 'CarroAmexDomicilio',
-            estado_entrega: 'EnAlmacen'
-          });
-        }
-
-        // 3. Registrar auditoría en escaneos_log
-        await supabase.from('escaneos_log').insert({
-          codigo: code,
-          formato: format,
-          modo_workflow: 'slotting',
-          ubicacion: targetLocation,
-          operador: 'Operador Logístico AMEX'
-        });
-
-        // 4. Registrar en Kardex de Movimientos Inmutable
-        await supabase.from('movimientos_kardex').insert({
-          paquete_id: pkg ? pkg.id : null,
-          codigo_paquete: pkg ? pkg.numeroReciboBodega : code,
-          consignatario: cli ? cli.nombre : (pkg ? pkg.nombreConsignatario : 'Cliente AMEX'),
-          origen_descripcion: pkg ? `${pkg.ubicacionActual} (${pkg.posicionEstante || 'REC'})` : 'Recepción Escáner',
-          destino_descripcion: `AmexLince (${targetLocation})`,
-          tipo_movimiento: 'SLOTTING',
-          motivo: `Clasificación y Slotting Escáner a estante ${targetLocation}`,
-          usuario_operador: 'Operador Logístico AMEX'
-        });
-      } catch (err) {
-        console.warn('Error saving scan to Supabase:', err);
+        onConfirmRef.current(code, format, {
+          mode: 'slotting',
+          location: targetLocation,
+          anaquel,
+          piso,
+          pkg,
+          cli
+        } as unknown as { mode: string; location?: string });
       }
     } else if (workflow === 'lookup') {
       setLastScannedCode({ code, time: now });
       performLookup(code);
       if (onConfirmRef.current) {
-        onConfirmRef.current(code, format, { mode: 'lookup' });
+        onConfirmRef.current(code, format, { mode: 'lookup', pkg, cli } as unknown as { mode: string; location?: string });
       }
     } else {
-      setLastScannedCode({ code, time: now });
+      setLastScannedCode({ code, location: targetLocation, time: now });
       if (onConfirmRef.current) {
-        onConfirmRef.current(code, format, { mode: workflow });
+        onConfirmRef.current(code, format, {
+          mode: workflow,
+          location: targetLocation,
+          anaquel,
+          piso,
+          pkg,
+          cli
+        } as unknown as { mode: string; location?: string });
       }
     }
 

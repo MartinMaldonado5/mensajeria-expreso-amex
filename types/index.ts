@@ -135,3 +135,20 @@ export interface MovimientoKardex {
   creadoEn: string;
 }
 
+export interface ScannedLog {
+  id: string;
+  code: string;
+  format: string;
+  time: string;
+  timestamp: number;
+  location?: string;
+  anaquel?: string;
+  piso?: string;
+  workflow?: 'slotting' | 'lookup' | 'delivery' | 'general';
+  nombreConsignatario?: string;
+  codigoCasillero?: string;
+  synced: boolean;
+  syncedAt?: string;
+}
+
+

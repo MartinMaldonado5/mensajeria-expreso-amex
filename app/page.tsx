@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Paquete, Cliente, TipoUbicacion, TipoMetodoEntrega, TipoEstadoEntrega } from '@/types';
+import { Paquete, Cliente, TipoUbicacion, TipoMetodoEntrega, TipoEstadoEntrega, ScannedLog } from '@/types';
 import { supabase } from '@/lib/supabase/client';
 import HeaderBar from '@/components/HeaderBar';
 import Sidebar from '@/components/Sidebar';
@@ -162,7 +162,7 @@ export default function DashboardPage() {
 
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [paquetes, setPaquetes] = useState<Paquete[]>([]);
-  const [scannedLogs, setScannedLogs] = useState<{ code: string; format: string; time: string; location?: string }[]>([]);
+  const [scannedLogs, setScannedLogs] = useState<ScannedLog[]>([]);
   const [selectedPdfUrl, setSelectedPdfUrl] = useState<string | null>(null);
   const [selectedDniImage, setSelectedDniImage] = useState<{ url: string; titulo: string; subtitulo: string } | null>(null);
   const [selectedThermalPkg, setSelectedThermalPkg] = useState<Paquete | null>(null);
@@ -172,6 +172,22 @@ export default function DashboardPage() {
 
   const [newClientForm, setNewClientForm] = useState<NewClientFormData>(EMPTY_CLIENT_FORM);
   const [newPkgForm, setNewPkgForm] = useState<NewPkgFormData>(EMPTY_PKG_FORM);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('amex_scanner_staging_queue_v2');
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed)) {
+            setScannedLogs(parsed);
+          }
+        }
+      } catch (err) {
+        console.warn('Error loading staging queue from localStorage:', err);
+      }
+    }
+  }, []);
 
   useEffect(() => {
     async function fetchSupabaseData() {
@@ -478,18 +494,47 @@ export default function DashboardPage() {
     setIsNewPkgModalOpen(true);
   };
 
-  const handleScanCode = async (code: string, format: string, extra?: { mode: string; location?: string }) => {
-    setScannedLogs(prev => [{ code, format, location: extra?.location, time: new Date().toLocaleTimeString() }, ...prev]);
-    try {
-      await supabase.from('escaneos_log').insert({
-        codigo: code,
-        formato: format,
-        modo_workflow: extra?.mode || 'slotting',
-        ubicacion: extra?.location || null,
-        operador: currentUser?.nombre || 'Operador Logístico AMEX'
-      });
-    } catch {
-      // Silent
+  const handleScanCode = (
+    code: string,
+    format: string,
+    extra?: {
+      mode?: string;
+      location?: string;
+      anaquel?: string;
+      piso?: string;
+      pkg?: Paquete;
+      cli?: Cliente;
+    }
+  ) => {
+    const newLog: ScannedLog = {
+      id: `scan-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
+      code: code.trim().toUpperCase(),
+      format,
+      time: new Date().toLocaleTimeString(),
+      timestamp: Date.now(),
+      location: extra?.location,
+      anaquel: extra?.anaquel,
+      piso: extra?.piso,
+      workflow: (extra?.mode as 'slotting' | 'lookup' | 'delivery' | 'general') || 'slotting',
+      nombreConsignatario: extra?.pkg?.nombreConsignatario || extra?.cli?.nombre,
+      codigoCasillero: extra?.pkg?.codigoCasillero || extra?.cli?.codigoCasillero,
+      synced: false
+    };
+
+    setScannedLogs(prev => {
+      const updated = [newLog, ...prev];
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.setItem('amex_scanner_staging_queue_v2', JSON.stringify(updated));
+        } catch (e) {
+          console.warn('localStorage save staging queue error:', e);
+        }
+      }
+      return updated;
+    });
+
+    if (extra?.location) {
+      handleAssignPackageLocation(code, extra.location);
     }
   };
 
@@ -618,6 +663,7 @@ export default function DashboardPage() {
               clientes={clientes}
               onConfirm={handleScanCode}
               onSlotPackage={handleAssignPackageLocation}
+              onUpdateLogs={setScannedLogs}
             />
           )}
             </>
