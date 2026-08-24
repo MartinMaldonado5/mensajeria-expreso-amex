@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Amex Courier | Sistema Logístico Integrado ERP",
+  title: "Amex Courier Sistema",
   description: "Plataforma Logística para Gestión de Casilleros, Almacén Miami, Sede Lince y Despachos",
 };
 

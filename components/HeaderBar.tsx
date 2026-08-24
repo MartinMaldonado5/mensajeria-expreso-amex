@@ -35,8 +35,9 @@ export default function HeaderBar({ currentUser, isSidebarCollapsed, onToggleSid
         >
           <i className={`fa-solid ${isSidebarCollapsed ? 'fa-bars' : 'fa-xmark'}`}></i>
         </button>
-        <span className="sap-logo-badge">ERP</span>
-        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '180px' }}>Amex Courier</span>
+        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 800, fontSize: '15.5px', letterSpacing: '0.3px', color: '#ffffff' }}>
+          Amex Courier Sistema
+        </span>
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
