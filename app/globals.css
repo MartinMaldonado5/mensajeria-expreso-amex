@@ -96,6 +96,9 @@ body {
   padding: 14px 12px;
   gap: 6px;
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+  overscroll-behavior-y: contain;
   transition: all 0.25s ease-in-out;
 }
 
@@ -170,6 +173,10 @@ body {
   flex: 1;
   padding: 24px 32px;
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+  overscroll-behavior-y: contain;
+  scroll-behavior: smooth;
   background: var(--sap-bg) !important;
   color: var(--sap-text) !important;
 }
@@ -825,29 +832,6 @@ tr:hover { background: #f8fafc !important; }
   min-height: 320px !important;
   object-fit: cover !important;
   border-radius: 8px !important;
-}
-
-/* ==========================================================================
-   LENIS SMOOTH SCROLLING
-   ========================================================================== */
-html.lenis, html.lenis body {
-  height: auto;
-}
-
-.lenis.lenis-smooth {
-  scroll-behavior: auto !important;
-}
-
-.lenis.lenis-smooth [data-lenis-prevent] {
-  overscroll-behavior: contain;
-}
-
-.lenis.lenis-stopped {
-  overflow: hidden;
-}
-
-.lenis.lenis-smooth iframe {
-  pointer-events: none;
 }
 
 /* ==========================================================================
