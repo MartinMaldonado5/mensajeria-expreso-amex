@@ -30,10 +30,13 @@ import {
   ShieldCheck,
   Package,
   Activity,
-  Grid
+  Grid,
+  Printer
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { TableSkeleton, MatrixSkeleton } from '@/components/ui/Skeleton';
+import ThermalLabelModal from '@/components/modals/ThermalLabelModal';
+import { TipoEstadoEntrega } from '@/types';
 
 interface InventoryTabProps {
   paquetes: Paquete[];
@@ -41,6 +44,7 @@ interface InventoryTabProps {
   onNewPackage: () => void;
   onViewPdf: (url: string) => void;
   onUpdatePackage?: (updated: Paquete) => void;
+  onDeletePackage?: (id: string) => void;
 }
 
 export default function InventoryTab({
@@ -48,14 +52,15 @@ export default function InventoryTab({
   clientes,
   onNewPackage,
   onViewPdf,
-  onUpdatePackage
+  onUpdatePackage,
+  onDeletePackage
 }: InventoryTabProps) {
   // Sub-pestañas: 'existencias' | 'movimientos' | 'matriz' | 'gestor'
   const [activeSubTab, setActiveSubTab] = useState<'existencias' | 'movimientos' | 'matriz' | 'gestor'>('existencias');
 
-  // Filtros de Existencias
+  // Filtros de Existencias (Por defecto enfocado en Almacén Central Lince)
   const [searchTerm, setSearchTerm] = useState('');
-  const [locationFilter, setLocationFilter] = useState<string>('ALL');
+  const [locationFilter, setLocationFilter] = useState<string>('AmexLince');
   const [shelfFilter, setShelfFilter] = useState<string>('ALL');
   const [floorFilter, setFloorFilter] = useState<string>('ALL');
   const [packageTypeFilter, setPackageTypeFilter] = useState<string>('ALL');
@@ -78,6 +83,9 @@ export default function InventoryTab({
   const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isNewPositionModalOpen, setIsNewPositionModalOpen] = useState(false);
+  const [isBatchStatusModalOpen, setIsBatchStatusModalOpen] = useState(false);
+  const [batchTargetStatus, setBatchTargetStatus] = useState<TipoEstadoEntrega>('EnAlmacen');
+  const [selectedThermalPkg, setSelectedThermalPkg] = useState<Paquete | null>(null);
   const [inspectingPosition, setInspectingPosition] = useState<string | null>(null);
   const [selectedPackageForAction, setSelectedPackageForAction] = useState<Paquete | null>(null);
 
@@ -491,6 +499,87 @@ export default function InventoryTab({
     setSelectedPackageForAction(null);
   };
 
+  // Eliminar paquete individual
+  const handleDeletePackage = async (pkgId: string, wrCode: string) => {
+    if (!confirm(`¿Estás seguro de eliminar el paquete ${wrCode} de la base de datos de Almacén Lince?`)) return;
+    try {
+      await supabase.from('paquetes').delete().eq('id', pkgId);
+      if (onDeletePackage) {
+        onDeletePackage(pkgId);
+      }
+      setSelectedIds(prev => prev.filter(x => x !== pkgId));
+    } catch (err) {
+      console.error('Error eliminando paquete:', err);
+      alert('Error al eliminar paquete.');
+    }
+  };
+
+  // Cambio rápido de estado individual
+  const handleQuickStatusChange = async (pkg: Paquete, newStatus: TipoEstadoEntrega) => {
+    try {
+      await supabase.from('paquetes').update({ estado_entrega: newStatus }).eq('id', pkg.id);
+      const updated: Paquete = { ...pkg, estadoEntrega: newStatus };
+      if (onUpdatePackage) onUpdatePackage(updated);
+
+      await supabase.from('movimientos_kardex').insert({
+        paquete_id: pkg.id,
+        codigo_paquete: pkg.numeroReciboBodega,
+        consignatario: pkg.nombreConsignatario || pkg.codigoCasillero,
+        origen_descripcion: `AmexLince (${pkg.posicionEstante || 'REC'})`,
+        destino_descripcion: `Estado actualizado a: ${newStatus}`,
+        tipo_movimiento: newStatus === 'Entregado' ? 'ENTREGA' : 'ESTADO_CAMBIO',
+        motivo: 'Ajuste operativo desde Almacén Central Lince',
+        usuario_operador: 'Operador Logístico AMEX'
+      });
+    } catch (err) {
+      console.error('Error actualizando estado:', err);
+    }
+  };
+
+  // Cambio de estado masivo en lote
+  const handleBatchStatusChange = async () => {
+    if (selectedIds.length === 0) return;
+    try {
+      await supabase.from('paquetes').update({ estado_entrega: batchTargetStatus }).in('id', selectedIds);
+      for (const id of selectedIds) {
+        const pkg = paquetes.find(p => p.id === id);
+        if (pkg) {
+          const updated: Paquete = { ...pkg, estadoEntrega: batchTargetStatus };
+          if (onUpdatePackage) onUpdatePackage(updated);
+          await supabase.from('movimientos_kardex').insert({
+            paquete_id: pkg.id,
+            codigo_paquete: pkg.numeroReciboBodega,
+            consignatario: pkg.nombreConsignatario || pkg.codigoCasillero,
+            origen_descripcion: `AmexLince (${pkg.posicionEstante || 'REC'})`,
+            destino_descripcion: `Estado en lote: ${batchTargetStatus}`,
+            tipo_movimiento: batchTargetStatus === 'Entregado' ? 'ENTREGA' : 'ESTADO_CAMBIO',
+            motivo: 'Cambio masivo de estado desde Almacén Lince',
+            usuario_operador: 'Operador Logístico AMEX'
+          });
+        }
+      }
+      setIsBatchStatusModalOpen(false);
+      setSelectedIds([]);
+    } catch (err) {
+      console.error('Error actualizando estado en lote:', err);
+    }
+  };
+
+  // Eliminación masiva en lote
+  const handleBatchDelete = async () => {
+    if (selectedIds.length === 0) return;
+    if (!confirm(`¿Estás seguro de eliminar los ${selectedIds.length} paquetes seleccionados de la base de datos?`)) return;
+    try {
+      await supabase.from('paquetes').delete().in('id', selectedIds);
+      if (onDeletePackage) {
+        selectedIds.forEach(id => onDeletePackage(id));
+      }
+      setSelectedIds([]);
+    } catch (err) {
+      console.error('Error eliminando en lote:', err);
+    }
+  };
+
   // Guardar Nueva Posición / Anaquel WMS
   const handleCreatePosition = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -633,7 +722,7 @@ export default function InventoryTab({
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
       {/* Breadcrumb & Header Principal */}
       <div className="sap-breadcrumb">
-        <span>Operaciones y Almacenes</span> / <span>Control de Inventario & Movimientos WMS</span>
+        <span>Operaciones y Almacenes</span> / <span>Almacén Central Sede Lince (Lima)</span>
       </div>
 
       <div
@@ -648,11 +737,11 @@ export default function InventoryTab({
       >
         <div>
           <h1 className="page-title" style={{ display: 'flex', alignItems: 'center', gap: '10px', margin: 0 }}>
-            <Boxes style={{ width: '28px', height: '28px', color: '#2563eb' }} />
-            Control de Inventario, Existencias y Movimientos WMS
+            <Warehouse style={{ width: '28px', height: '28px', color: '#2563eb' }} />
+            Almacén Central Sede Lince (Lima)
           </h1>
           <p className="page-subtitle" style={{ margin: '4px 0 0 0' }}>
-            Gestión física integral de paquetes, reubicaciones, trazabilidad Kardex y matriz de anaqueles
+            Búsquedas en tiempo real, modificaciones de bultos, traslados entre anaqueles/pisos y control de salidas
           </p>
         </div>
 
@@ -900,11 +989,12 @@ export default function InventoryTab({
                     background: '#eff6ff',
                     padding: '6px 12px',
                     borderRadius: '8px',
-                    border: '1px solid #bfdbfe'
+                    border: '1px solid #bfdbfe',
+                    flexWrap: 'wrap'
                   }}
                 >
                   <span style={{ fontSize: '12px', fontWeight: 800, color: '#1e40af' }}>
-                    {selectedIds.length} paquete(s) seleccionados
+                    {selectedIds.length} paquete(s) seleccionados:
                   </span>
                   <button
                     onClick={() => openTransferModal()}
@@ -918,7 +1008,39 @@ export default function InventoryTab({
                       gap: '4px'
                     }}
                   >
-                    <ArrowRightLeft className="w-3.5 h-3.5" /> Reubicar / Trasladar Selección
+                    <ArrowRightLeft className="w-3.5 h-3.5" /> Reubicar Selección
+                  </button>
+                  <button
+                    onClick={() => setIsBatchStatusModalOpen(true)}
+                    className="btn btn-secondary"
+                    style={{
+                      padding: '4px 10px',
+                      fontSize: '12px',
+                      height: '28px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      background: '#ffffff'
+                    }}
+                  >
+                    <Truck className="w-3.5 h-3.5 text-amber-600" /> Cambiar Estado
+                  </button>
+                  <button
+                    onClick={handleBatchDelete}
+                    className="btn"
+                    style={{
+                      padding: '4px 10px',
+                      fontSize: '12px',
+                      height: '28px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      background: '#fee2e2',
+                      color: '#dc2626',
+                      border: '1px solid #fecaca'
+                    }}
+                  >
+                    <Trash2 className="w-3.5 h-3.5" /> Eliminar
                   </button>
                   <button
                     onClick={() => setSelectedIds([])}
@@ -1233,20 +1355,41 @@ export default function InventoryTab({
                             </div>
                           </td>
                           <td style={{ padding: '10px 14px' }}>
-                            <span
+                            <select
+                              value={pkg.estadoEntrega}
+                              onChange={e => handleQuickStatusChange(pkg, e.target.value as TipoEstadoEntrega)}
                               style={{
                                 fontSize: '11px',
-                                fontWeight: 700,
-                                color: pkg.estadoEntrega === 'EnAlmacen' ? '#0369a1' : '#15803d'
+                                fontWeight: 800,
+                                padding: '4px 6px',
+                                borderRadius: '6px',
+                                border: '1px solid #cbd5e1',
+                                background:
+                                  pkg.estadoEntrega === 'Entregado'
+                                    ? '#dcfce7'
+                                    : pkg.estadoEntrega === 'EnRutaCarroAmex'
+                                    ? '#fef3c7'
+                                    : '#eff6ff',
+                                color:
+                                  pkg.estadoEntrega === 'Entregado'
+                                    ? '#166534'
+                                    : pkg.estadoEntrega === 'EnRutaCarroAmex'
+                                    ? '#92400e'
+                                    : '#1e40af',
+                                cursor: 'pointer',
+                                outline: 'none'
                               }}
                             >
-                              {pkg.estadoEntrega}
-                            </span>
+                              <option value="EnAlmacen">📦 En Almacén</option>
+                              <option value="EnRutaCarroAmex">🚚 En Ruta</option>
+                              <option value="ListoParaRecojo">🏪 Listo Recojo</option>
+                              <option value="Entregado">✅ Entregado</option>
+                            </select>
                           </td>
                           <td style={{ padding: '10px 14px', textAlign: 'center' }}>
-                            <div style={{ display: 'flex', gap: '6px', justifyContent: 'center' }}>
+                            <div style={{ display: 'flex', gap: '5px', justifyContent: 'center' }}>
                               <button
-                                title="Reubicar o Trasladar"
+                                title="Reubicar o Trasladar Anaquel/Piso"
                                 onClick={() => openTransferModal(pkg)}
                                 style={{
                                   background: '#eff6ff',
@@ -1265,7 +1408,7 @@ export default function InventoryTab({
                               </button>
 
                               <button
-                                title="Editar Paquete / Ajustar Existencia"
+                                title="Editar Paquete / Modificar Datos"
                                 onClick={() => openEditModal(pkg)}
                                 style={{
                                   background: '#f8fafc',
@@ -1283,9 +1426,28 @@ export default function InventoryTab({
                                 <Edit3 className="w-3.5 h-3.5" />
                               </button>
 
+                              <button
+                                title="Imprimir Rótulo Térmico 4x6"
+                                onClick={() => setSelectedThermalPkg(pkg)}
+                                style={{
+                                  background: '#f0fdf4',
+                                  border: '1px solid #bbf7d0',
+                                  color: '#166534',
+                                  width: '28px',
+                                  height: '28px',
+                                  borderRadius: '6px',
+                                  cursor: 'pointer',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center'
+                                }}
+                              >
+                                <Printer className="w-3.5 h-3.5" />
+                              </button>
+
                               {pkg.facturaPdfUrl && (
                                 <button
-                                  title="Ver Factura PDF"
+                                  title="Ver Factura PDF R2"
                                   onClick={() => onViewPdf(pkg.facturaPdfUrl!)}
                                   style={{
                                     background: '#fef2f2',
@@ -1303,6 +1465,25 @@ export default function InventoryTab({
                                   <FileText className="w-3.5 h-3.5" />
                                 </button>
                               )}
+
+                              <button
+                                title="Eliminar Paquete de Almacén"
+                                onClick={() => handleDeletePackage(pkg.id, pkg.numeroReciboBodega)}
+                                style={{
+                                  background: '#fef2f2',
+                                  border: '1px solid #fecaca',
+                                  color: '#dc2626',
+                                  width: '28px',
+                                  height: '28px',
+                                  borderRadius: '6px',
+                                  cursor: 'pointer',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center'
+                                }}
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
                             </div>
                           </td>
                         </tr>
@@ -2281,6 +2462,60 @@ export default function InventoryTab({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DE RÓTULO TÉRMICO */}
+      {selectedThermalPkg && (
+        <ThermalLabelModal
+          pkg={selectedThermalPkg}
+          onClose={() => setSelectedThermalPkg(null)}
+        />
+      )}
+
+      {/* MODAL DE CAMBIO DE ESTADO MASIVO EN LOTE */}
+      {isBatchStatusModalOpen && (
+        <div className="modal-backdrop">
+          <div className="modal-dialog" style={{ maxWidth: '440px' }}>
+            <div className="modal-header">
+              <span className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#2563eb' }}>
+                <Truck className="w-5 h-5" /> Cambiar Estado Masivo ({selectedIds.length} paquetes)
+              </span>
+              <button
+                onClick={() => setIsBatchStatusModalOpen(false)}
+                style={{ background: 'none', border: 'none', fontSize: '18px', cursor: 'pointer', color: '#64748b' }}
+              >
+                ✕
+              </button>
+            </div>
+            <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <p style={{ fontSize: '12.5px', color: '#475569', margin: 0 }}>
+                Selecciona el nuevo estado para los <strong>{selectedIds.length}</strong> paquetes seleccionados:
+              </p>
+              <div className="form-group">
+                <label style={{ fontSize: '12px', fontWeight: 800, color: '#334155' }}>Nuevo Estado</label>
+                <select
+                  value={batchTargetStatus}
+                  onChange={e => setBatchTargetStatus(e.target.value as TipoEstadoEntrega)}
+                  className="form-control"
+                  style={{ fontWeight: 700 }}
+                >
+                  <option value="EnAlmacen">📦 En Almacén (Custodia Lince)</option>
+                  <option value="EnRutaCarroAmex">🚚 En Ruta Carro Amex (Despacho Domicilio)</option>
+                  <option value="ListoParaRecojo">🏪 Listo para Recojo en Tienda Lince</option>
+                  <option value="Entregado">✅ Entregado / Despachado</option>
+                </select>
+              </div>
+              <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+                <button type="button" onClick={() => setIsBatchStatusModalOpen(false)} className="btn btn-secondary">
+                  Cancelar
+                </button>
+                <button type="button" onClick={handleBatchStatusChange} className="btn btn-primary" style={{ fontWeight: 800 }}>
+                  ✓ Aplicar a {selectedIds.length} paquetes
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

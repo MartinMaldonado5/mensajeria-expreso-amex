@@ -53,7 +53,7 @@ const EMPTY_PKG_FORM: NewPkgFormData = {
 };
 
 export default function DashboardPage() {
-  const [activeTab, setActiveTabState] = useState<string>('mm-inventory');
+  const [activeTab, setActiveTabState] = useState<string>('mm-lince');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(true);
 
   useEffect(() => {
@@ -67,6 +67,14 @@ export default function DashboardPage() {
     if (typeof window !== 'undefined' && window.innerWidth <= 768) {
       setIsSidebarCollapsed(true);
     }
+  }, []);
+
+  const handleUpdatePackage = useCallback((updated: Paquete) => {
+    setPaquetes(prev => prev.map(p => (p.id === updated.id ? updated : p)));
+  }, []);
+
+  const handleDeletePackage = useCallback((id: string) => {
+    setPaquetes(prev => prev.filter(p => p.id !== id));
   }, []);
 
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({
@@ -465,10 +473,6 @@ export default function DashboardPage() {
     }
   };
 
-  const handleUpdatePackage = (updated: Paquete) => {
-    setPaquetes(prev => prev.map(p => p.id === updated.id ? updated : p));
-  };
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', width: '100vw', overflow: 'hidden' }}>
       <HeaderBar
@@ -521,13 +525,14 @@ export default function DashboardPage() {
             <DniTab clientes={clientes} onViewDniImage={setSelectedDniImage} />
           )}
 
-          {activeTab === 'mm-inventory' && (
+          {(activeTab === 'mm-lince' || activeTab === 'mm-inventory') && (
             <InventoryTab
               paquetes={paquetes}
               clientes={clientes}
               onNewPackage={openNewPkgModal}
               onViewPdf={setSelectedPdfUrl}
               onUpdatePackage={handleUpdatePackage}
+              onDeletePackage={handleDeletePackage}
             />
           )}
 
@@ -550,18 +555,6 @@ export default function DashboardPage() {
               title="2. Almacén Regional (Tingo María)"
               subtitle="Control de sacas y paquetes en tránsito regional Tingo María"
               breadcrumb="Almacén Tingo María"
-              onNewPackage={openNewPkgModal}
-              onViewPdf={setSelectedPdfUrl}
-            />
-          )}
-
-          {activeTab === 'mm-lince' && (
-            <MiamiTab
-              paquetes={paquetes}
-              location="AmexLince"
-              title="3. Almacén Central Sede Lince (Lima)"
-              subtitle="Recepción, clasificación y despacho final en Sede Central Lince"
-              breadcrumb="Almacén Central Lince"
               onNewPackage={openNewPkgModal}
               onViewPdf={setSelectedPdfUrl}
             />

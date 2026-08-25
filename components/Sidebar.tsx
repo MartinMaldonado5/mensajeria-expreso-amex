@@ -94,12 +94,9 @@ export default function Sidebar({
         </div>
 
         <div className="sap-sub-menu" style={{ paddingLeft: '2px', display: 'flex', flexDirection: 'column', gap: '3px' }}>
-          {navItem('mm-inventory', 'fa-solid fa-boxes-stacked', '📦 Inventario & Movimientos WMS')}
+          {navItem('mm-lince', 'fa-solid fa-store', '🏢 Almacén Central (Lince)')}
           {navItem('wms-picking', 'fa-solid fa-clipboard-list', '📋 Picking & Despacho (Shalom/Olva)')}
           {navItem('mobile-scanner', 'fa-solid fa-barcode', '📱 Escáner de Códigos')}
-          {navItem('mm-lince', 'fa-solid fa-store', '🏢 Almacén Central (Lince)')}
-          {navItem('mm-miami', 'fa-solid fa-plane-departure', '✈️ Almacén Miami (USA)')}
-          {navItem('mm-tingo', 'fa-solid fa-dolly', '🌴 Almacén Tingo María')}
         </div>
       </div>
 
@@ -152,8 +149,15 @@ export default function Sidebar({
               gap: '4px'
             }}
           >
-            {/* 1. Panel General */}
+            {/* 0. Almacenes Externos */}
             <div style={{ fontSize: '10px', color: '#64748b', fontWeight: 800, padding: '4px 6px 0 6px', textTransform: 'uppercase' }}>
+              ✈️ Almacenes Externos
+            </div>
+            {navItem('mm-miami', 'fa-solid fa-plane-departure', 'Almacén Miami (USA)')}
+            {navItem('mm-tingo', 'fa-solid fa-dolly', 'Almacén Tingo María')}
+
+            {/* 1. Panel General */}
+            <div style={{ fontSize: '10px', color: '#64748b', fontWeight: 800, padding: '6px 6px 0 6px', textTransform: 'uppercase' }}>
               📊 Panel General
             </div>
             {navItem('dashboard', 'fa-solid fa-chart-pie', 'Resumen & Métricas')}
