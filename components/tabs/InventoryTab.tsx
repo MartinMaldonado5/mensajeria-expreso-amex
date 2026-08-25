@@ -81,7 +81,10 @@ export default function InventoryTab({
   const [sedesList, setSedesList] = useState<AlmacenSede[]>([]);
   const [isLoadingKardex, setIsLoadingKardex] = useState(false);
 
-  // Modales
+  // Modales Pop-Up
+  const [isGestorModalOpen, setIsGestorModalOpen] = useState(false);
+  const [isMatrizModalOpen, setIsMatrizModalOpen] = useState(false);
+  const [isKardexModalOpen, setIsKardexModalOpen] = useState(false);
   const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isNewPositionModalOpen, setIsNewPositionModalOpen] = useState(false);
@@ -676,7 +679,7 @@ export default function InventoryTab({
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
           <button
             className="btn"
-            onClick={activeSubTab === 'movimientos' ? handleExportKardexExcel : handleExportExcel}
+            onClick={handleExportExcel}
             style={{
               background: '#f0fdf4',
               border: '1px solid #bbf7d0',
@@ -692,10 +695,10 @@ export default function InventoryTab({
 
           <button
             className="btn"
-            onClick={() => setIsNewPositionModalOpen(true)}
+            onClick={() => setIsMatrizModalOpen(true)}
             style={{
-              background: '#f8fafc',
-              border: '1px solid #cbd5e1',
+              background: '#eff6ff',
+              border: '1px solid #bfdbfe',
               color: '#1e40af',
               display: 'flex',
               alignItems: 'center',
@@ -703,7 +706,39 @@ export default function InventoryTab({
               fontWeight: 700
             }}
           >
-            <Settings className="w-4 h-4 text-blue-600" /> + Configurar Anaquel
+            <Layers className="w-4 h-4 text-blue-600" /> 🗺️ Mapa 3D Slotting
+          </button>
+
+          <button
+            className="btn"
+            onClick={() => setIsGestorModalOpen(true)}
+            style={{
+              background: '#f8fafc',
+              border: '1px solid #cbd5e1',
+              color: '#334155',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              fontWeight: 700
+            }}
+          >
+            <Settings className="w-4 h-4 text-slate-700" /> ⚙️ Configurar Anaqueles
+          </button>
+
+          <button
+            className="btn"
+            onClick={() => setIsKardexModalOpen(true)}
+            style={{
+              background: '#f0fdfa',
+              border: '1px solid #99f6e4',
+              color: '#0f766e',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              fontWeight: 700
+            }}
+          >
+            <Clock className="w-4 h-4 text-teal-600" /> 🔄 Kardex Movimientos
           </button>
 
           <button
@@ -813,54 +848,58 @@ export default function InventoryTab({
         </div>
       </div>
 
-      {/* Selector de Sub-Pestañas */}
-      <div className="wms-subtab-container">
+      {/* Selector de Sub-Pestañas & Accesos Pop-Up */}
+      <div className="wms-subtab-container" style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
         <button
           onClick={() => setActiveSubTab('existencias')}
           className="wms-subtab-btn"
           style={{
             background: activeSubTab === 'existencias' ? '#2563eb' : '#f8fafc',
-            color: activeSubTab === 'existencias' ? '#ffffff' : '#64748b',
-            border: activeSubTab === 'existencias' ? '1px solid #1d4ed8' : '1px solid #e2e8f0'
+            color: activeSubTab === 'existencias' ? '#ffffff' : '#475569',
+            border: activeSubTab === 'existencias' ? '1px solid #1d4ed8' : '1px solid #e2e8f0',
+            fontWeight: 800
           }}
         >
-          <Boxes className="w-4 h-4" /> 1. Existencias ({filteredPaquetes.length})
+          <Boxes className="w-4 h-4" /> 1. Existencias Lince ({filteredPaquetes.length})
         </button>
 
         <button
-          onClick={() => setActiveSubTab('movimientos')}
+          onClick={() => setIsGestorModalOpen(true)}
           className="wms-subtab-btn"
           style={{
-            background: activeSubTab === 'movimientos' ? '#2563eb' : '#f8fafc',
-            color: activeSubTab === 'movimientos' ? '#ffffff' : '#64748b',
-            border: activeSubTab === 'movimientos' ? '1px solid #1d4ed8' : '1px solid #e2e8f0'
+            background: '#ffffff',
+            color: '#1e40af',
+            border: '1px solid #cbd5e1',
+            fontWeight: 700
           }}
         >
-          <ArrowRightLeft className="w-4 h-4" /> 2. Kardex Movimientos ({kardexList.length})
+          <Settings className="w-4 h-4 text-blue-600" /> ⚙️ Configurar Anaqueles (Pop-up)
         </button>
 
         <button
-          onClick={() => setActiveSubTab('matriz')}
+          onClick={() => setIsMatrizModalOpen(true)}
           className="wms-subtab-btn"
           style={{
-            background: activeSubTab === 'matriz' ? '#2563eb' : '#f8fafc',
-            color: activeSubTab === 'matriz' ? '#ffffff' : '#64748b',
-            border: activeSubTab === 'matriz' ? '1px solid #1d4ed8' : '1px solid #e2e8f0'
+            background: '#ffffff',
+            color: '#4338ca',
+            border: '1px solid #cbd5e1',
+            fontWeight: 700
           }}
         >
-          <Layers className="w-4 h-4" /> 3. Matriz de Anaqueles (Slotting)
+          <Layers className="w-4 h-4 text-indigo-600" /> 🗺️ Mapa Visual 3D Slotting (Pop-up)
         </button>
 
         <button
-          onClick={() => setActiveSubTab('gestor')}
+          onClick={() => setIsKardexModalOpen(true)}
           className="wms-subtab-btn"
           style={{
-            background: activeSubTab === 'gestor' ? '#2563eb' : '#f8fafc',
-            color: activeSubTab === 'gestor' ? '#ffffff' : '#64748b',
-            border: activeSubTab === 'gestor' ? '1px solid #1d4ed8' : '1px solid #e2e8f0'
+            background: '#ffffff',
+            color: '#0f766e',
+            border: '1px solid #cbd5e1',
+            fontWeight: 700
           }}
         >
-          <Settings className="w-4 h-4" /> 4. Gestor de Estanterías ({posicionesList.length})
+          <Clock className="w-4 h-4 text-teal-600" /> 🔄 Kardex Movimientos ({kardexList.length}) (Pop-up)
         </button>
       </div>
 
@@ -2443,6 +2482,540 @@ export default function InventoryTab({
                   ✓ Aplicar a {selectedIds.length} paquetes
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* 1. MODAL POP-UP: GESTOR Y CONFIGURACIÓN DE ANAQUELES WMS                 */}
+      {/* ========================================================================= */}
+      {isGestorModalOpen && (
+        <div className="modal-backdrop">
+          <div className="modal-dialog" style={{ maxWidth: '980px', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
+            <div className="modal-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 20px', borderBottom: '1px solid #e2e8f0' }}>
+              <span className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#1e40af', fontSize: '16px', fontWeight: 800 }}>
+                <Settings className="w-5 h-5" /> Gestor Dinámico de Anaqueles y Parámetros WMS
+              </span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <button
+                  onClick={() => setIsNewPositionModalOpen(true)}
+                  className="btn btn-primary"
+                  style={{ fontSize: '12px', padding: '5px 12px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 800 }}
+                >
+                  <Plus className="w-4 h-4" /> + Nueva Posición
+                </button>
+                <button
+                  onClick={() => setIsGestorModalOpen(false)}
+                  style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: '#64748b' }}
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+
+            <div className="modal-body" style={{ overflowY: 'auto', maxHeight: 'calc(90vh - 130px)', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <p style={{ margin: 0, fontSize: '12.5px', color: '#64748b' }}>
+                  Administra los anaqueles físicos, niveles de piso, límites de peso y zonas de operación en el Almacén Central Lince
+                </p>
+                <span style={{ fontSize: '11.5px', fontWeight: 800, background: '#eff6ff', color: '#1d4ed8', padding: '4px 10px', borderRadius: '6px' }}>
+                  {posicionesList.length} posiciones configuradas
+                </span>
+              </div>
+
+              <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '12px', overflow: 'hidden' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12.5px', textAlign: 'left' }}>
+                  <thead>
+                    <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', color: '#475569', fontWeight: 800 }}>
+                      <th style={{ padding: '10px 14px' }}>Código Posición</th>
+                      <th style={{ padding: '10px 14px' }}>Anaquel</th>
+                      <th style={{ padding: '10px 14px' }}>Nivel / Piso</th>
+                      <th style={{ padding: '10px 14px' }}>Tipo de Zona</th>
+                      <th style={{ padding: '10px 14px' }}>Ocupación / Capacidad</th>
+                      <th style={{ padding: '10px 14px' }}>Límite Peso (Kg)</th>
+                      <th style={{ padding: '10px 14px' }}>Descripción</th>
+                      <th style={{ padding: '10px 14px', textAlign: 'center' }}>Acción</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {posicionesList.map(pos => {
+                      const countInPos = paquetes.filter(p => p.posicionEstante === pos.codigoPosicion || (p.anaquel === pos.codigoEstante && p.piso === pos.nivelPiso)).length;
+                      const maxCap = pos.capacidadMaxPaquetes || 40;
+                      const pct = Math.min(Math.round((countInPos / maxCap) * 100), 100);
+
+                      return (
+                        <tr key={pos.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                          <td style={{ padding: '10px 14px', fontWeight: 800, fontFamily: 'monospace', color: '#2563eb' }}>
+                            {pos.codigoPosicion}
+                          </td>
+                          <td style={{ padding: '10px 14px', fontWeight: 700, color: '#0f172a' }}>
+                            {pos.codigoEstante}
+                          </td>
+                          <td style={{ padding: '10px 14px', color: '#334155' }}>
+                            {pos.nivelPiso}
+                          </td>
+                          <td style={{ padding: '10px 14px' }}>
+                            <span
+                              style={{
+                                fontSize: '10.5px',
+                                fontWeight: 800,
+                                padding: '2px 6px',
+                                borderRadius: '4px',
+                                background:
+                                  pos.zonaTipo === 'ALMACENAJE'
+                                    ? '#eff6ff'
+                                    : pos.zonaTipo === 'RECEPCION'
+                                    ? '#fef3c7'
+                                    : '#f0fdf4',
+                                color:
+                                  pos.zonaTipo === 'ALMACENAJE'
+                                    ? '#1e40af'
+                                    : pos.zonaTipo === 'RECEPCION'
+                                    ? '#b45309'
+                                    : '#166534'
+                              }}
+                            >
+                              {pos.zonaTipo}
+                            </span>
+                          </td>
+                          <td style={{ padding: '10px 14px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <div style={{ flex: 1, minWidth: '60px', height: '6px', background: '#e2e8f0', borderRadius: '999px', overflow: 'hidden' }}>
+                                <div style={{ width: `${pct}%`, height: '100%', background: pct > 85 ? '#ef4444' : pct > 60 ? '#f59e0b' : '#22c55e' }} />
+                              </div>
+                              <span style={{ fontSize: '11px', fontWeight: 700, color: '#334155' }}>
+                                {countInPos} / {maxCap} ({pct}%)
+                              </span>
+                            </div>
+                          </td>
+                          <td style={{ padding: '10px 14px', color: '#64748b' }}>
+                            {pos.pesoMaxKg} Kg
+                          </td>
+                          <td style={{ padding: '10px 14px', color: '#64748b' }}>
+                            {pos.descripcion || '-'}
+                          </td>
+                          <td style={{ padding: '10px 14px', textAlign: 'center' }}>
+                            <button
+                              title="Eliminar Posición"
+                              onClick={() => handleDeletePosition(pos.id)}
+                              style={{
+                                background: '#fef2f2',
+                                border: '1px solid #fecaca',
+                                color: '#dc2626',
+                                width: '28px',
+                                height: '28px',
+                                borderRadius: '6px',
+                                cursor: 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center'
+                              }}
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', padding: '12px 20px', borderTop: '1px solid #e2e8f0' }}>
+              <button className="btn btn-secondary" onClick={() => setIsGestorModalOpen(false)}>
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* 2. MODAL POP-UP: MATRIZ VISUAL 3D SLOTTING DE ANAQUELES                  */}
+      {/* ========================================================================= */}
+      {isMatrizModalOpen && (
+        <div className="modal-backdrop">
+          <div className="modal-dialog" style={{ maxWidth: '1050px', maxHeight: '92vh', display: 'flex', flexDirection: 'column' }}>
+            <div className="modal-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 20px', borderBottom: '1px solid #e2e8f0' }}>
+              <span className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#4338ca', fontSize: '16px', fontWeight: 800 }}>
+                <Layers className="w-5 h-5" /> Mapa Físico & Distribución de Anaqueles (Slotting WMS Lince)
+              </span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <button
+                  onClick={() => setIsNewPositionModalOpen(true)}
+                  className="btn btn-primary"
+                  style={{ fontSize: '12px', padding: '5px 12px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 800 }}
+                >
+                  <Plus className="w-4 h-4" /> + Agregar Anaquel / Nivel
+                </button>
+                <button
+                  onClick={() => setIsMatrizModalOpen(false)}
+                  style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: '#64748b' }}
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+
+            <div className="modal-body" style={{ overflowY: 'auto', maxHeight: 'calc(92vh - 130px)', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '16px' }}>
+                {Object.entries(shelfGroups).map(([shelfCode, positions]) => {
+                  const totalInShelf = paquetes.filter(
+                    p =>
+                      p.anaquel === shelfCode ||
+                      (p.posicionEstante && p.posicionEstante.startsWith(shelfCode))
+                  ).length;
+
+                  const isSpecialZone = shelfCode === 'REC' || shelfCode === 'DSP';
+                  const borderColor =
+                    shelfCode === 'A1'
+                      ? '#3b82f6'
+                      : shelfCode === 'A2'
+                      ? '#16a34a'
+                      : isSpecialZone
+                      ? '#f59e0b'
+                      : '#8b5cf6';
+
+                  return (
+                    <div
+                      key={shelfCode}
+                      style={{
+                        background: '#ffffff',
+                        border: `2px solid ${borderColor}`,
+                        borderRadius: '14px',
+                        padding: '16px',
+                        boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          marginBottom: '14px',
+                          borderBottom: '1px solid #e2e8f0',
+                          paddingBottom: '10px'
+                        }}
+                      >
+                        <span
+                          style={{
+                            fontSize: '14px',
+                            fontWeight: 800,
+                            color: '#0f172a',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px'
+                          }}
+                        >
+                          <Layers className="w-4 h-4 text-blue-600" />{' '}
+                          {isSpecialZone
+                            ? shelfCode === 'REC'
+                              ? 'Mesa de Recepción (REC)'
+                              : 'Zona de Despacho (DSP)'
+                            : `ANAQUEL ${shelfCode}`}
+                        </span>
+                        <span
+                          style={{
+                            fontSize: '12px',
+                            fontWeight: 800,
+                            background: '#eff6ff',
+                            color: '#1e40af',
+                            padding: '2px 8px',
+                            borderRadius: '6px'
+                          }}
+                        >
+                          {totalInShelf} paquetes
+                        </span>
+                      </div>
+
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                        {positions.map(posItem => {
+                          const posCode = posItem.codigoPosicion;
+                          const pkgsInFloor = paquetes.filter(
+                            p =>
+                              p.posicionEstante === posCode ||
+                              (p.anaquel === shelfCode && p.piso === posItem.nivelPiso)
+                          );
+                          const maxCap = posItem.capacidadMaxPaquetes || 40;
+                          const percent = Math.min(Math.round((pkgsInFloor.length / maxCap) * 100), 100);
+
+                          const floorLabel =
+                            posItem.nivelPiso === 'P3'
+                              ? 'Piso 3 (Superior)'
+                              : posItem.nivelPiso === 'P2'
+                              ? 'Piso 2 (Medio)'
+                              : posItem.nivelPiso === 'P1'
+                              ? 'Piso 1 (Inferior)'
+                              : `Nivel ${posItem.nivelPiso}`;
+
+                          return (
+                            <div
+                              key={posItem.id}
+                              style={{
+                                background: '#f8fafc',
+                                border: '1px solid #e2e8f0',
+                                borderRadius: '10px',
+                                padding: '12px',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: '6px'
+                              }}
+                            >
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <span style={{ fontSize: '12px', fontWeight: 800, color: '#0f172a' }}>
+                                  {isSpecialZone ? posItem.descripcion || posCode : floorLabel}
+                                </span>
+                                <span
+                                  style={{
+                                    fontSize: '11px',
+                                    fontWeight: 800,
+                                    color: '#2563eb',
+                                    fontFamily: 'monospace'
+                                  }}
+                                >
+                                  {posCode}
+                                </span>
+                              </div>
+
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <div
+                                  style={{
+                                    flex: 1,
+                                    height: '8px',
+                                    background: '#e2e8f0',
+                                    borderRadius: '999px',
+                                    overflow: 'hidden'
+                                  }}
+                                >
+                                  <div
+                                    style={{
+                                      width: `${percent}%`,
+                                      height: '100%',
+                                      background: percent > 85 ? '#ef4444' : percent > 60 ? '#f59e0b' : '#22c55e',
+                                      borderRadius: '999px',
+                                      transition: 'width 0.3s ease'
+                                    }}
+                                  />
+                                </div>
+                                <span
+                                  style={{
+                                    fontSize: '11px',
+                                    fontWeight: 800,
+                                    color: '#475569',
+                                    minWidth: '70px',
+                                    textAlign: 'right'
+                                  }}
+                                >
+                                  {pkgsInFloor.length} / {maxCap} ({percent}%)
+                                </span>
+                              </div>
+
+                              {pkgsInFloor.length > 0 && (
+                                <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginTop: '4px' }}>
+                                  {pkgsInFloor.slice(0, 6).map(p => (
+                                    <span
+                                      key={p.id}
+                                      onClick={() => {
+                                        setIsMatrizModalOpen(false);
+                                        openTransferModal(p);
+                                      }}
+                                      title={`Clic para reubicar: ${p.numeroReciboBodega} (${p.nombreConsignatario || p.codigoCasillero})`}
+                                      style={{
+                                        fontSize: '10px',
+                                        fontWeight: 800,
+                                        fontFamily: 'monospace',
+                                        background: '#ffffff',
+                                        border: '1px solid #cbd5e1',
+                                        padding: '2px 6px',
+                                        borderRadius: '4px',
+                                        color: '#334155',
+                                        cursor: 'pointer'
+                                      }}
+                                    >
+                                      {p.numeroReciboBodega}
+                                    </span>
+                                  ))}
+                                  {pkgsInFloor.length > 6 && (
+                                    <span
+                                      onClick={() => {
+                                        setIsMatrizModalOpen(false);
+                                        setInspectingPosition(posCode);
+                                      }}
+                                      style={{
+                                        fontSize: '10px',
+                                        color: '#2563eb',
+                                        fontWeight: 800,
+                                        alignSelf: 'center',
+                                        cursor: 'pointer',
+                                        textDecoration: 'underline'
+                                      }}
+                                    >
+                                      +{pkgsInFloor.length - 6} más (Ver todos)
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', padding: '12px 20px', borderTop: '1px solid #e2e8f0' }}>
+              <button className="btn btn-secondary" onClick={() => setIsMatrizModalOpen(false)}>
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* 3. MODAL POP-UP: KARDEX DE MOVIMIENTOS Y TRAZABILIDAD                    */}
+      {/* ========================================================================= */}
+      {isKardexModalOpen && (
+        <div className="modal-backdrop">
+          <div className="modal-dialog" style={{ maxWidth: '1080px', maxHeight: '92vh', display: 'flex', flexDirection: 'column' }}>
+            <div className="modal-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 20px', borderBottom: '1px solid #e2e8f0' }}>
+              <span className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#0f766e', fontSize: '16px', fontWeight: 800 }}>
+                <Clock className="w-5 h-5" /> Bitácora Kardex de Movimientos y Auditoría en Vivo
+              </span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <button
+                  onClick={handleExportKardexExcel}
+                  className="btn"
+                  style={{ fontSize: '12px', padding: '4px 10px', background: '#f0fdf4', border: '1px solid #bbf7d0', color: '#166534', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '4px' }}
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" /> Exportar (.xlsx)
+                </button>
+                <button
+                  onClick={fetchData}
+                  className="btn"
+                  style={{ fontSize: '12px', padding: '4px 10px', display: 'flex', alignItems: 'center', gap: '4px' }}
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isLoadingKardex ? 'animate-spin' : ''}`} /> Refrescar
+                </button>
+                <button
+                  onClick={() => setIsKardexModalOpen(false)}
+                  style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: '#64748b' }}
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+
+            <div className="modal-body" style={{ overflowY: 'auto', maxHeight: 'calc(92vh - 130px)', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
+                <div style={{ position: 'relative', flex: '1 1 260px' }}>
+                  <Search style={{ position: 'absolute', left: '10px', top: '9px', width: '15px', height: '15px', color: '#94a3b8' }} />
+                  <input
+                    type="text"
+                    placeholder="Buscar por Guía, Consignatario, Origen, Destino u Operador..."
+                    value={kardexSearch}
+                    onChange={e => setKardexSearch(e.target.value)}
+                    style={{ width: '100%', padding: '6px 10px 6px 32px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '12.5px' }}
+                  />
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ fontSize: '12px', fontWeight: 800, color: '#475569' }}>Tipo:</span>
+                  <select
+                    value={kardexTypeFilter}
+                    onChange={e => setKardexTypeFilter(e.target.value)}
+                    style={{ padding: '4px 8px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '12px' }}
+                  >
+                    <option value="ALL">Todos los Movimientos</option>
+                    <option value="RECEPCION">Recepción</option>
+                    <option value="SLOTTING">Slotting / Clasificación</option>
+                    <option value="REUBICACION">Reubicación</option>
+                    <option value="DESPACHO">Despacho</option>
+                    <option value="ENTREGA">Entrega</option>
+                  </select>
+                </div>
+              </div>
+
+              {isLoadingKardex ? (
+                <TableSkeleton rows={6} columns={6} />
+              ) : (
+                <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '12px', overflow: 'hidden' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12.5px', textAlign: 'left' }}>
+                    <thead>
+                      <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', color: '#475569', fontWeight: 800 }}>
+                        <th style={{ padding: '10px 14px' }}>Fecha & Hora</th>
+                        <th style={{ padding: '10px 14px' }}>Paquete / Guía</th>
+                        <th style={{ padding: '10px 14px' }}>Consignatario</th>
+                        <th style={{ padding: '10px 14px' }}>Origen ➔ Destino</th>
+                        <th style={{ padding: '10px 14px' }}>Tipo & Motivo</th>
+                        <th style={{ padding: '10px 14px' }}>Operador Responsable</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredKardex.length === 0 ? (
+                        <tr>
+                          <td colSpan={6} style={{ textAlign: 'center', padding: '32px', color: '#94a3b8' }}>
+                            <Clock style={{ width: '36px', height: '36px', margin: '0 auto 8px auto', color: '#cbd5e1' }} />
+                            <div style={{ fontWeight: 800, color: '#64748b' }}>No hay registros de Kardex coincidentes</div>
+                          </td>
+                        </tr>
+                      ) : (
+                        filteredKardex.map(mov => (
+                          <tr key={mov.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                            <td style={{ padding: '10px 14px', color: '#64748b', fontSize: '12px' }}>
+                              {new Date(mov.creadoEn).toLocaleString()}
+                            </td>
+                            <td style={{ padding: '10px 14px', fontWeight: 800, fontFamily: 'monospace', color: '#2563eb' }}>
+                              {mov.codigoPaquete}
+                            </td>
+                            <td style={{ padding: '10px 14px', color: '#0f172a', fontWeight: 600 }}>
+                              {mov.consignatario || '-'}
+                            </td>
+                            <td style={{ padding: '10px 14px' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px' }}>
+                                <span style={{ color: '#dc2626', fontWeight: 700 }}>{mov.origenDescripcion}</span>
+                                <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+                                <span style={{ color: '#166534', fontWeight: 700 }}>{mov.destinoDescripcion}</span>
+                              </div>
+                            </td>
+                            <td style={{ padding: '10px 14px', color: '#334155' }}>
+                              <span
+                                style={{
+                                  fontSize: '10px',
+                                  fontWeight: 800,
+                                  padding: '2px 6px',
+                                  borderRadius: '4px',
+                                  background: '#eff6ff',
+                                  color: '#1e40af',
+                                  marginRight: '6px'
+                                }}
+                              >
+                                {mov.tipoMovimiento}
+                              </span>
+                              {mov.motivo}
+                            </td>
+                            <td style={{ padding: '10px 14px', color: '#64748b', fontSize: '11.5px', fontWeight: 700 }}>
+                              <span style={{ background: '#f1f5f9', padding: '3px 8px', borderRadius: '4px' }}>
+                                {mov.usuarioOperador}
+                              </span>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', padding: '12px 20px', borderTop: '1px solid #e2e8f0' }}>
+              <button className="btn btn-secondary" onClick={() => setIsKardexModalOpen(false)}>
+                Cerrar
+              </button>
             </div>
           </div>
         </div>
