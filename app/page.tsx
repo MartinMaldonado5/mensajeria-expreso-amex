@@ -14,6 +14,7 @@ import ScannerTab from '@/components/tabs/ScannerTab';
 import InventoryTab from '@/components/tabs/InventoryTab';
 import PickingTab from '@/components/tabs/PickingTab';
 import DeliveriesTab from '@/components/tabs/DeliveriesTab';
+import EntregasTab from '@/components/tabs/EntregasTab';
 import NewClientModal, { NewClientFormData } from '@/components/modals/NewClientModal';
 import NewPackageModal, { NewPkgFormData } from '@/components/modals/NewPackageModal';
 import ThermalLabelModal from '@/components/modals/ThermalLabelModal';
@@ -557,6 +558,15 @@ export default function DashboardPage() {
               subtitle="Control de sacas y paquetes en tránsito regional Tingo María"
               breadcrumb="Almacén Tingo María"
               onNewPackage={openNewPkgModal}
+              onViewPdf={setSelectedPdfUrl}
+            />
+          )}
+
+          {activeTab === 'shp-entregas' && (
+            <EntregasTab
+              paquetes={paquetes}
+              clientes={clientes}
+              onUpdatePackage={handleUpdatePackage}
               onViewPdf={setSelectedPdfUrl}
             />
           )}

@@ -240,4 +240,33 @@ export function exportHojaDeRutaToExcel(
   exportToExcel(`Hoja_Ruta_CarroAMEX_${dateStr}`, 'Hoja de Ruta', formattedData);
 }
 
+/**
+ * Exportador profesional de Historial de Entregas & Evidencias a Excel (.xlsx)
+ */
+export function exportEntregasToExcel(entregas: any[], filenamePrefix = 'Historial_Entregas_AMEX') {
+  const formattedData = entregas.map((e, idx) => ({
+    'N°': idx + 1,
+    'Código Entrega': e.codigo_entrega,
+    'Tipo': e.tipo_entrega,
+    'Cliente Consignatario': e.cliente_nombre,
+    'Casillero': e.cliente_casillero || '',
+    'DNI / Documento': e.cliente_documento || '',
+    'Receptor (Quien Recibió)': e.receptor_nombre || e.cliente_nombre,
+    'DNI Receptor': e.receptor_documento || '',
+    'Parentesco': e.receptor_parentesco || 'Titular',
+    'Total Paquetes': e.total_paquetes || 0,
+    'WRs Entregados': Array.isArray(e.paquetes_data) ? e.paquetes_data.map((p: any) => p.numeroReciboBodega || p.wr || p).join(', ') : '',
+    'Total Fotos Evidencia': Array.isArray(e.fotos_evidencia) ? e.fotos_evidencia.length : 0,
+    'Operador Responsable': e.operador_asignado,
+    'Estado': e.estado,
+    'Fecha Creación': e.creado_en ? new Date(e.creado_en).toLocaleString('es-PE') : '',
+    'Fecha Entrega': e.entregado_en ? new Date(e.entregado_en).toLocaleString('es-PE') : '',
+    'Notas / Observaciones': e.notas || ''
+  }));
+
+  const dateStr = new Date().toISOString().slice(0, 10);
+  exportToExcel(`${filenamePrefix}_${dateStr}`, 'Entregas', formattedData);
+}
+
+
 
