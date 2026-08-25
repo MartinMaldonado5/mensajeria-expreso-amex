@@ -95,6 +95,7 @@ export default function Sidebar({
 
         <div className="sap-sub-menu" style={{ paddingLeft: '2px', display: 'flex', flexDirection: 'column', gap: '3px' }}>
           {navItem('mm-lince', 'fa-solid fa-store', '🏢 Almacén Central (Lince)')}
+          {navItem('shp-deliveries', 'fa-solid fa-car-side', '🚚 Despacho & Reparto (Carro AMEX)')}
           {navItem('wms-picking', 'fa-solid fa-clipboard-list', '📋 Picking & Despacho (Shalom/Olva)')}
           {navItem('mobile-scanner', 'fa-solid fa-barcode', '📱 Escáner de Códigos')}
         </div>
@@ -169,13 +170,7 @@ export default function Sidebar({
             {navItem('sd-customers', 'fa-solid fa-address-book', 'Directorio de Casilleros')}
             {navItem('sd-dni', 'fa-solid fa-id-card', 'Expedientes DNI')}
 
-            {/* 3. Despacho */}
-            <div style={{ fontSize: '10px', color: '#64748b', fontWeight: 800, padding: '6px 6px 0 6px', textTransform: 'uppercase' }}>
-              🚚 Despacho
-            </div>
-            {navItem('shp-deliveries', 'fa-solid fa-car-side', 'Reparto Carro Amex')}
-
-            {/* 4. Finanzas */}
+            {/* 3. Finanzas */}
             <div style={{ fontSize: '10px', color: '#64748b', fontWeight: 800, padding: '6px 6px 0 6px', textTransform: 'uppercase' }}>
               💵 Finanzas
             </div>

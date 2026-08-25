@@ -13,6 +13,7 @@ import LiquidationsTab from '@/components/tabs/LiquidationsTab';
 import ScannerTab from '@/components/tabs/ScannerTab';
 import InventoryTab from '@/components/tabs/InventoryTab';
 import PickingTab from '@/components/tabs/PickingTab';
+import DeliveriesTab from '@/components/tabs/DeliveriesTab';
 import NewClientModal, { NewClientFormData } from '@/components/modals/NewClientModal';
 import NewPackageModal, { NewPkgFormData } from '@/components/modals/NewPackageModal';
 import ThermalLabelModal from '@/components/modals/ThermalLabelModal';
@@ -561,13 +562,10 @@ export default function DashboardPage() {
           )}
 
           {activeTab === 'shp-deliveries' && (
-            <MiamiTab
+            <DeliveriesTab
               paquetes={paquetes}
-              location="deliveries"
-              title="4. Despacho y Reparto (Carro Amex)"
-              subtitle="Rutas de entrega a domicilio y traslados a agencias Olva / Shalom"
-              breadcrumb="Despacho & Reparto"
-              onNewPackage={openNewPkgModal}
+              clientes={clientes}
+              onUpdatePackage={handleUpdatePackage}
               onViewPdf={setSelectedPdfUrl}
             />
           )}

@@ -211,3 +211,33 @@ export function exportLiquidacionesToExcel(paquetes: Paquete[]) {
   exportToExcel(`Liquidaciones_AMEX_${dateStr}`, 'Liquidaciones', formattedData);
 }
 
+/**
+ * Exportador profesional de Hoja de Ruta de Reparto (Carro AMEX) a Excel (.xlsx)
+ */
+export function exportHojaDeRutaToExcel(
+  paquetes: (Paquete & { cliente?: Cliente })[],
+  chofer = 'Carlos Mendoza (Camioneta AMEX)',
+  ruta = 'Ruta Lima Metropolitana'
+) {
+  const formattedData = paquetes.map((p, idx) => ({
+    'Parada N°': idx + 1,
+    'Guía WR': p.numeroReciboBodega,
+    'Casillero': p.codigoCasillero,
+    'Cliente / Consignatario': p.nombreConsignatario || p.cliente?.nombre || 'No asignado',
+    'DNI / Documento': p.dniConsignatario || p.cliente?.documentoIdentidad || '',
+    'Teléfono / WhatsApp': p.cliente?.telefono || '',
+    'Distrito': p.cliente?.distrito || 'Lima',
+    'Dirección de Entrega': p.cliente?.direccionEntrega || 'Dirección de contacto',
+    'Tipo Empaque': p.tipoEmpaque,
+    'Peso (Kg)': Number(p.pesoKg || 0),
+    'Estado Entrega': p.estadoEntrega === 'EnRutaCarroAmex' ? 'EN RUTA' : p.estadoEntrega,
+    'Conductor Asignado': chofer,
+    'Zona / Ruta': ruta,
+    'Firma de Conformidad': ''
+  }));
+
+  const dateStr = new Date().toISOString().slice(0, 10);
+  exportToExcel(`Hoja_Ruta_CarroAMEX_${dateStr}`, 'Hoja de Ruta', formattedData);
+}
+
+
