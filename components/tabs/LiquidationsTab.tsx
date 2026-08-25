@@ -1,6 +1,8 @@
 'use client';
 
 import { Paquete } from '@/types';
+import { FileSpreadsheet } from 'lucide-react';
+import { exportLiquidacionesToExcel } from '@/lib/excelExport';
 
 interface LiquidationsTabProps {
   paquetes: Paquete[];
@@ -16,6 +18,23 @@ export default function LiquidationsTab({ paquetes }: LiquidationsTabProps) {
         <div>
           <h1 className="page-title">Liquidaciones Financieras y Cobranzas</h1>
           <p className="page-subtitle">Desglose de fletes en USD y Soles (PEN) con comprobantes de pago Yape/BCP</p>
+        </div>
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+          <button
+            className="btn"
+            onClick={() => exportLiquidacionesToExcel(paquetes)}
+            style={{
+              background: '#f0fdf4',
+              border: '1px solid #bbf7d0',
+              color: '#166534',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              fontWeight: 800
+            }}
+          >
+            <FileSpreadsheet className="w-4 h-4 text-emerald-600" /> Exportar Excel (.xlsx)
+          </button>
         </div>
       </div>
 

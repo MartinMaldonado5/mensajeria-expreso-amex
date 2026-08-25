@@ -27,10 +27,12 @@ import {
   X,
   ExternalLink,
   ChevronRight,
-  PackageCheck
+  PackageCheck,
+  FileSpreadsheet
 } from 'lucide-react';
 import { Paquete, Cliente, OrdenPicking, ItemPicking, TipoEstadoPicking } from '@/types';
 import { supabase } from '@/lib/supabase/client';
+import { exportPickingOrderToExcel } from '@/lib/excelExport';
 
 interface PickingTabProps {
   paquetes: Paquete[];
@@ -1377,13 +1379,21 @@ export default function PickingTab({
               </div>
             </div>
 
-            <div className="modal-footer">
+            <div className="modal-footer" style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
               <button
                 type="button"
                 onClick={() => setManifestOrder(null)}
                 className="btn btn-secondary"
               >
                 Cerrar
+              </button>
+              <button
+                type="button"
+                onClick={() => exportPickingOrderToExcel(manifestOrder, itemsMap[manifestOrder.id] || [])}
+                className="btn"
+                style={{ fontWeight: 800, display: 'flex', alignItems: 'center', gap: '6px', background: '#f0fdf4', border: '1px solid #bbf7d0', color: '#166534' }}
+              >
+                <FileSpreadsheet className="w-4 h-4 text-emerald-600" /> Exportar Manifiesto Excel (.xlsx)
               </button>
               <button
                 type="button"

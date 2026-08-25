@@ -2,7 +2,8 @@
 
 import React, { useState } from 'react';
 import { Paquete, TipoUbicacion } from '@/types';
-import { Layers, Box, CheckCircle2, Filter } from 'lucide-react';
+import { Layers, Box, CheckCircle2, Filter, FileSpreadsheet } from 'lucide-react';
+import { exportPaquetesToExcel } from '@/lib/excelExport';
 
 interface WarehouseTabProps {
   paquetes: Paquete[];
@@ -65,9 +66,26 @@ export default function MiamiTab({
           <h1 className="page-title">{title}</h1>
           <p className="page-subtitle">{subtitle}</p>
         </div>
-        <button className="btn btn-primary" onClick={onNewPackage}>
-          <i className="fa-solid fa-box-open"></i> Registrar Paquete
-        </button>
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+          <button
+            className="btn"
+            onClick={() => exportPaquetesToExcel(filteredPackages, `Inventario_${location}`)}
+            style={{
+              background: '#f0fdf4',
+              border: '1px solid #bbf7d0',
+              color: '#166534',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              fontWeight: 800
+            }}
+          >
+            <FileSpreadsheet className="w-4 h-4 text-emerald-600" /> Exportar Excel (.xlsx)
+          </button>
+          <button className="btn btn-primary" onClick={onNewPackage}>
+            <i className="fa-solid fa-box-open"></i> Registrar Paquete
+          </button>
+        </div>
       </div>
 
       {/* Tarjetas de Métricas de Ocupación por Anaquel */}

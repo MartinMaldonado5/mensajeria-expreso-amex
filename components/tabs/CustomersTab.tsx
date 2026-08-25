@@ -1,6 +1,8 @@
 'use client';
 
 import { Cliente } from '@/types';
+import { FileSpreadsheet } from 'lucide-react';
+import { exportClientesToExcel } from '@/lib/excelExport';
 
 interface CustomersTabProps {
   clientes: Cliente[];
@@ -19,7 +21,22 @@ export default function CustomersTab({ clientes, onNewClient, onViewDni }: Custo
           <h1 className="page-title">Directorio de Casilleros e Importadores</h1>
           <p className="page-subtitle">Base de datos de casilleros `AMEX-PER-XXXX` con datos fiscales y de despacho</p>
         </div>
-        <div style={{ display: 'flex', gap: '8px' }}>
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+          <button
+            className="btn"
+            onClick={() => exportClientesToExcel(clientes)}
+            style={{
+              background: '#f0fdf4',
+              border: '1px solid #bbf7d0',
+              color: '#166534',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              fontWeight: 800
+            }}
+          >
+            <FileSpreadsheet className="w-4 h-4 text-emerald-600" /> Exportar Excel (.xlsx)
+          </button>
           <button className="btn btn-primary" onClick={onNewClient}>
             <i className="fa-solid fa-user-plus"></i> Crear Nuevo Casillero
           </button>

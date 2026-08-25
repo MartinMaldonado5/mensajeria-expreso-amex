@@ -31,12 +31,14 @@ import {
   Package,
   Activity,
   Grid,
-  Printer
+  Printer,
+  FileSpreadsheet
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { TableSkeleton, MatrixSkeleton } from '@/components/ui/Skeleton';
 import ThermalLabelModal from '@/components/modals/ThermalLabelModal';
 import { TipoEstadoEntrega } from '@/types';
+import { exportPaquetesToExcel, exportKardexToExcel } from '@/lib/excelExport';
 
 interface InventoryTabProps {
   paquetes: Paquete[];
@@ -634,88 +636,14 @@ export default function InventoryTab({
     }
   };
 
-  // Exportar Existencias a CSV
-  const handleExportCSV = () => {
-    const headers = [
-      'Guía WR',
-      'Casillero',
-      'Tracking USA',
-      'Consignatario',
-      'DNI',
-      'Descripción',
-      'Tipo Empaque',
-      'Peso Kg',
-      'Valor USD',
-      'Almacén Actual',
-      'Anaquel',
-      'Piso',
-      'Posición Estante',
-      'Método Entrega',
-      'Estado Entrega'
-    ];
-
-    const rows = filteredPaquetes.map(p => [
-      p.numeroReciboBodega,
-      p.codigoCasillero,
-      p.trackingUsa,
-      `"${p.nombreConsignatario || ''}"`,
-      p.dniConsignatario || '',
-      `"${p.descripcion || ''}"`,
-      p.tipoEmpaque,
-      p.pesoKg,
-      p.valorDeclaradoUsd,
-      p.ubicacionActual,
-      p.anaquel || '',
-      p.piso || '',
-      p.posicionEstante || '',
-      p.metodoEntrega,
-      p.estadoEntrega
-    ]);
-
-    const csvContent =
-      'data:text/csv;charset=utf-8,\uFEFF' + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `inventario_amex_${new Date().toISOString().slice(0, 10)}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  // Exportar Existencias a Excel (.xlsx)
+  const handleExportExcel = () => {
+    exportPaquetesToExcel(filteredPaquetes, 'Inventario_AMEX_Lince');
   };
 
-  // Exportar Kardex a CSV
-  const handleExportKardexCSV = () => {
-    const headers = [
-      'Fecha y Hora',
-      'Guía Paquete',
-      'Consignatario',
-      'Origen',
-      'Destino',
-      'Tipo Movimiento',
-      'Motivo',
-      'Operador Responsable'
-    ];
-
-    const rows = filteredKardex.map(k => [
-      new Date(k.creadoEn).toLocaleString(),
-      k.codigoPaquete,
-      `"${k.consignatario || ''}"`,
-      `"${k.origenDescripcion}"`,
-      `"${k.destinoDescripcion}"`,
-      k.tipoMovimiento,
-      `"${k.motivo || ''}"`,
-      `"${k.usuarioOperador}"`
-    ]);
-
-    const csvContent =
-      'data:text/csv;charset=utf-8,\uFEFF' + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `kardex_amex_${new Date().toISOString().slice(0, 10)}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  // Exportar Kardex a Excel (.xlsx)
+  const handleExportKardexExcel = () => {
+    exportKardexToExcel(filteredKardex, 'Kardex_Movimientos_AMEX');
   };
 
   return (
@@ -748,18 +676,18 @@ export default function InventoryTab({
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
           <button
             className="btn"
-            onClick={activeSubTab === 'movimientos' ? handleExportKardexCSV : handleExportCSV}
+            onClick={activeSubTab === 'movimientos' ? handleExportKardexExcel : handleExportExcel}
             style={{
-              background: '#f8fafc',
-              border: '1px solid #cbd5e1',
-              color: '#334155',
+              background: '#f0fdf4',
+              border: '1px solid #bbf7d0',
+              color: '#166534',
               display: 'flex',
               alignItems: 'center',
               gap: '6px',
-              fontWeight: 700
+              fontWeight: 800
             }}
           >
-            <Download className="w-4 h-4 text-emerald-600" /> Exportar CSV
+            <FileSpreadsheet className="w-4 h-4 text-emerald-600" /> Exportar Excel (.xlsx)
           </button>
 
           <button

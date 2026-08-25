@@ -27,8 +27,10 @@ import {
   Clock,
   ArrowRight,
   ShieldCheck,
-  X
+  X,
+  FileSpreadsheet
 } from 'lucide-react';
+import { exportScannerLogsToExcel } from '@/lib/excelExport';
 import { Paquete, Cliente, ScannedLog } from '@/types';
 import { supabase } from '@/lib/supabase/client';
 
@@ -175,7 +177,7 @@ export default function ScannerTab({
     setEditingLog(null);
   };
 
-  // Copiar y Exportar CSV
+  // Copiar y Exportar Excel
   const handleCopyAll = () => {
     if (scannedLogs.length === 0) return;
     const text = scannedLogs.map(l => `${l.code}\t${l.location || 'N/A'}\t${l.synced ? 'SINCRONIZADO' : 'PENDIENTE'}\t${l.time}`).join('\n');
@@ -184,19 +186,9 @@ export default function ScannerTab({
     setTimeout(() => setCopiedNotification(false), 2000);
   };
 
-  const handleExportCsv = () => {
+  const handleExportExcel = () => {
     if (scannedLogs.length === 0) return;
-    const csvContent = 'data:text/csv;charset=utf-8,\uFEFF' +
-      'Index,Codigo_WR,Formato,Ubicacion_Estante,Consignatario,Casillero,Hora,Estado_Sincronizacion\n' +
-      scannedLogs.map((l, i) => `${i + 1},"${l.code}","${l.format}","${l.location || 'N/A'}","${l.nombreConsignatario || ''}","${l.codigoCasillero || ''}","${l.time}","${l.synced ? 'Sincronizado Master' : 'Borrador Local'}"`).join('\n');
-
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `lecturas_cola_amex_${new Date().toISOString().slice(0, 10)}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    exportScannerLogsToExcel(scannedLogs, 'Lecturas_Escaneo_AMEX');
   };
 
   // 🚀 SUBIDA CONFIRMADA A SUPABASE MASTER
@@ -575,12 +567,12 @@ export default function ScannerTab({
                 </button>
 
                 <button
-                  onClick={handleExportCsv}
+                  onClick={handleExportExcel}
                   className="btn btn-secondary"
-                  style={{ height: '34px', padding: '0 8px', fontSize: '11.5px', borderRadius: '8px', fontWeight: 700 }}
-                  title="Exportar CSV para Excel"
+                  style={{ height: '34px', padding: '0 8px', fontSize: '11.5px', borderRadius: '8px', fontWeight: 700, background: '#f0fdf4', border: '1px solid #bbf7d0', color: '#166534' }}
+                  title="Exportar cola de lecturas a Excel (.xlsx)"
                 >
-                  <Download className="w-3.5 h-3.5" /> CSV
+                  <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" /> Excel (.xlsx)
                 </button>
               </div>
             </div>

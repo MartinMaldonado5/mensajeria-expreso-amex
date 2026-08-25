@@ -2,7 +2,7 @@
 
 export type TipoUbicacion = 'TibCourierMiami' | 'TibCourierTingoMaria' | 'TibTingoMaria' | 'AmexLince' | 'Entregado';
 export type TipoMetodoEntrega = 'RecojoLince' | 'CarroAmexDomicilio' | 'AgenciaProvincia';
-export type TipoEstadoEntrega = 'EnAlmacen' | 'EnRutaCarroAmex' | 'EntregadoDomicilio' | 'RecogidoAlmacen' | 'Entregado';
+export type TipoEstadoEntrega = 'EnAlmacen' | 'EnRutaCarroAmex' | 'EntregadoDomicilio' | 'RecogidoAlmacen' | 'ListoParaRecojo' | 'Entregado';
 export type TipoMonedaPago = 'PEN' | 'USD';
 
 export interface Cliente {
