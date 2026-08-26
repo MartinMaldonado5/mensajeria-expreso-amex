@@ -15,7 +15,7 @@ export default function Sidebar({
   onSelectTab,
   onCloseSidebar
 }: SidebarProps) {
-  const navItem = (tab: string, icon: string, label: string, badge?: string, badgeColor = '#2563eb') => {
+  const navItem = (tab: string, icon: string, label: string) => {
     const isActive = activeTab === tab;
     return (
       <div
@@ -30,7 +30,7 @@ export default function Sidebar({
           fontWeight: isActive ? 800 : 600,
           display: 'flex',
           alignItems: 'center',
-          justifyContent: 'space-between',
+          gap: '10px',
           cursor: 'pointer',
           transition: 'all 0.15s ease',
           background: isActive ? 'linear-gradient(90deg, rgba(37, 99, 235, 0.25) 0%, rgba(37, 99, 235, 0.1) 100%)' : 'transparent',
@@ -38,24 +38,8 @@ export default function Sidebar({
           color: isActive ? '#ffffff' : '#cbd5e1'
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <i className={icon} style={{ width: '16px', textAlign: 'center', color: isActive ? '#38bdf8' : '#94a3b8' }}></i>
-          <span>{label}</span>
-        </div>
-        {badge && (
-          <span
-            style={{
-              fontSize: '10px',
-              fontWeight: 800,
-              background: badgeColor,
-              color: '#ffffff',
-              padding: '1px 6px',
-              borderRadius: '9999px'
-            }}
-          >
-            {badge}
-          </span>
-        )}
+        <i className={icon} style={{ width: '18px', textAlign: 'center', color: isActive ? '#38bdf8' : '#94a3b8' }}></i>
+        <span>{label}</span>
       </div>
     );
   };
@@ -119,13 +103,13 @@ export default function Sidebar({
 
         {/* 7 SUBMÓDULOS EN ORDEN OPERATIVO */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-          {navItem('dashboard', 'fa-solid fa-chart-pie', '1. Panel Operativo', 'KPIs', '#2563eb')}
-          {navItem('mm-lince', 'fa-solid fa-store', '2. Almacén Central (Lince)', 'Stock', '#0284c7')}
-          {navItem('shp-entregas', 'fa-solid fa-box-open', '3. Entregas & Búsqueda WR', 'Mostrador', '#d97706')}
-          {navItem('fico-cobros', 'fa-solid fa-receipt', '4. Cobros & Vouchers', 'WhatsApp', '#16a34a')}
-          {navItem('shp-deliveries', 'fa-solid fa-car-side', '5. Despacho Carro AMEX', 'Rutas', '#7c3aed')}
-          {navItem('wms-picking', 'fa-solid fa-clipboard-list', '6. Picking Shalom/Olva', 'Agencias', '#e11d48')}
-          {navItem('mobile-scanner', 'fa-solid fa-barcode', '7. Escáner de Códigos', 'Móvil', '#0d9488')}
+          {navItem('dashboard', 'fa-solid fa-chart-pie', '1. Panel Operativo')}
+          {navItem('mm-lince', 'fa-solid fa-store', '2. Almacén Central (Lince)')}
+          {navItem('shp-entregas', 'fa-solid fa-box-open', '3. Entregas & Búsqueda WR')}
+          {navItem('fico-cobros', 'fa-solid fa-receipt', '4. Cobros & Vouchers')}
+          {navItem('shp-deliveries', 'fa-solid fa-car-side', '5. Despacho Carro AMEX')}
+          {navItem('wms-picking', 'fa-solid fa-clipboard-list', '6. Picking Shalom/Olva')}
+          {navItem('mobile-scanner', 'fa-solid fa-barcode', '7. Escáner de Códigos')}
         </div>
       </div>
 
