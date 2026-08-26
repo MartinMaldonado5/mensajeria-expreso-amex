@@ -268,5 +268,33 @@ export function exportEntregasToExcel(entregas: any[], filenamePrefix = 'Histori
   exportToExcel(`${filenamePrefix}_${dateStr}`, 'Entregas', formattedData);
 }
 
+/**
+ * Exportador profesional de Cobros & Vouchers de WhatsApp a Excel (.xlsx)
+ */
+export function exportCobrosToExcel(cobros: any[], filenamePrefix = 'Cobros_Vouchers_AMEX') {
+  const formattedData = cobros.map((c, idx) => ({
+    'N°': idx + 1,
+    'Código Cobro': c.codigo_cobro,
+    'Cliente / Consignatario': c.cliente_nombre,
+    'Casillero': c.cliente_casillero || '',
+    'Teléfono WhatsApp': c.cliente_telefono || '',
+    'Monto': Number(c.monto || 0),
+    'Moneda': c.moneda || 'PEN',
+    'Método de Pago': c.metodo_pago,
+    'N° Operación': c.numero_operacion || 'S/N',
+    'WRs Pagados': Array.isArray(c.paquetes_wrs) ? c.paquetes_wrs.map((w: any) => w.numeroReciboBodega || w.wr || w).join(', ') : '',
+    'Estado Pago': c.estado,
+    'Registrado Por': c.registrado_por,
+    'Fecha Operación': c.fecha_operacion || '',
+    'Fecha Registro': c.creado_en ? new Date(c.creado_en).toLocaleString('es-PE') : '',
+    'Enlace Voucher R2': c.voucher_url || '',
+    'Notas': c.notas || ''
+  }));
+
+  const dateStr = new Date().toISOString().slice(0, 10);
+  exportToExcel(`${filenamePrefix}_${dateStr}`, 'Cobros Vouchers', formattedData);
+}
+
+
 
 

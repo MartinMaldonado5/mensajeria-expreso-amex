@@ -96,6 +96,7 @@ export default function Sidebar({
         <div className="sap-sub-menu" style={{ paddingLeft: '2px', display: 'flex', flexDirection: 'column', gap: '3px' }}>
           {navItem('mm-lince', 'fa-solid fa-store', '🏢 Almacén Central (Lince)')}
           {navItem('shp-entregas', 'fa-solid fa-box-open', '📦 Entregas & Búsqueda WR')}
+          {navItem('fico-cobros', 'fa-solid fa-receipt', '💰 Cobros & Vouchers (WhatsApp)')}
           {navItem('shp-deliveries', 'fa-solid fa-car-side', '🚚 Despacho & Reparto (Carro AMEX)')}
           {navItem('wms-picking', 'fa-solid fa-clipboard-list', '📋 Picking & Despacho (Shalom/Olva)')}
           {navItem('mobile-scanner', 'fa-solid fa-barcode', '📱 Escáner de Códigos')}

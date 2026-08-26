@@ -6,6 +6,7 @@ import {
   buildInvoicePath,
   buildDniPath,
   buildManifiestoPath,
+  buildVoucherPath,
   getDateSegments,
   sanitizeFileName
 } from '@/lib/r2/datePartitionedUpload';
@@ -19,6 +20,8 @@ const ALLOWED_FOLDERS = new Set([
   'documentos-dni',
   'manifiestos',
   'manifiestos-despacho',
+  'vouchers',
+  'vouchers-pagos',
   'fotos',
   'documentos'
 ]);
@@ -38,11 +41,13 @@ export async function POST(req: NextRequest) {
 
     // Parámetros contextuales opcionales para nomenclatura amigable
     const codigoEntrega = (formData.get('codigoEntrega') as string) || '';
+    const codigoCobro = (formData.get('codigoCobro') as string) || '';
     const clienteNombre = (formData.get('clienteNombre') as string) || '';
     const receptorNombre = (formData.get('receptorNombre') as string) || '';
     const wrNumero = (formData.get('wrNumero') as string) || '';
     const casillero = (formData.get('casillero') as string) || '';
     const tienda = (formData.get('tienda') as string) || '';
+    const metodoPago = (formData.get('metodoPago') as string) || 'YAPE';
     const tipoDni = (formData.get('tipoDni') as 'ANVERSO' | 'REVERSO' | 'COMPLETO') || 'ANVERSO';
 
     if (!file) {
@@ -66,6 +71,9 @@ export async function POST(req: NextRequest) {
     if (folder === 'entregas' || folder === 'expedientes' || folder === 'fotos') {
       const clienteOReceptor = receptorNombre || clienteNombre || 'CLIENTE';
       subPath = buildEntregaPath(codigoEntrega, clienteOReceptor, file.name);
+    } else if (folder === 'vouchers' || folder === 'vouchers-pagos') {
+      const ext = file.name.split('.').pop() || 'webp';
+      subPath = buildVoucherPath(codigoCobro || 'VOU', clienteNombre || 'CLIENTE', metodoPago, ext);
     } else if (folder === 'facturas' || folder === 'facturas-invoices') {
       subPath = buildInvoicePath(wrNumero, clienteNombre, tienda, file.name);
     } else if (folder === 'dnis' || folder === 'documentos-dni') {

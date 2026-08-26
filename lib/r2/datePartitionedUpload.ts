@@ -95,3 +95,23 @@ export function buildManifiestoPath(
 
   return `manifiestos-despacho/${year}/${month}/${day}/MANIFIESTO_${cleanRuta}_${cleanId}.${ext.toLowerCase()}`;
 }
+
+/**
+ * Genera la ruta para vouchers y comprobantes de pago (WhatsApp / Yape / BCP / Plin):
+ * FOLDER AMEX/vouchers-pagos/YYYY/MM/DD/VOU-001_JUAN_PEREZ_YAPE.webp
+ */
+export function buildVoucherPath(
+  codigoCobro: string,
+  clienteNombre: string,
+  metodoPago: string = 'YAPE',
+  ext: string = 'webp',
+  date: Date = new Date()
+): string {
+  const { year, month, day } = getDateSegments(date);
+  const cleanCodigo = sanitizeFileName(codigoCobro || 'VOU-001');
+  const cleanCliente = sanitizeFileName(clienteNombre || 'CLIENTE');
+  const cleanMetodo = sanitizeFileName(metodoPago || 'PAGO');
+
+  return `vouchers-pagos/${year}/${month}/${day}/${cleanCodigo}_${cleanCliente}_${cleanMetodo}.${ext.toLowerCase()}`;
+}
+

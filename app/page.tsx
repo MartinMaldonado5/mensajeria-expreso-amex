@@ -15,6 +15,7 @@ import InventoryTab from '@/components/tabs/InventoryTab';
 import PickingTab from '@/components/tabs/PickingTab';
 import DeliveriesTab from '@/components/tabs/DeliveriesTab';
 import EntregasTab from '@/components/tabs/EntregasTab';
+import CobrosTab from '@/components/tabs/CobrosTab';
 import NewClientModal, { NewClientFormData } from '@/components/modals/NewClientModal';
 import NewPackageModal, { NewPkgFormData } from '@/components/modals/NewPackageModal';
 import ThermalLabelModal from '@/components/modals/ThermalLabelModal';
@@ -568,6 +569,14 @@ export default function DashboardPage() {
               clientes={clientes}
               onUpdatePackage={handleUpdatePackage}
               onViewPdf={setSelectedPdfUrl}
+            />
+          )}
+
+          {activeTab === 'fico-cobros' && (
+            <CobrosTab
+              paquetes={paquetes}
+              clientes={clientes}
+              onUpdatePackage={handleUpdatePackage}
             />
           )}
 
