@@ -35,8 +35,8 @@ export default function HeaderBar({ currentUser, isSidebarCollapsed, onToggleSid
         >
           <i className={`fa-solid ${isSidebarCollapsed ? 'fa-bars' : 'fa-xmark'}`}></i>
         </button>
-        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 800, fontSize: '15.5px', letterSpacing: '0.3px', color: '#ffffff' }}>
-          Amex Courier Sistema
+        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 900, fontSize: '15.5px', letterSpacing: '0.3px', color: '#ffffff' }}>
+          AMEX Courier <span style={{ color: '#38bdf8', fontWeight: 600, fontSize: '13px' }}>| Operaciones & Almacenes</span>
         </span>
       </div>
 

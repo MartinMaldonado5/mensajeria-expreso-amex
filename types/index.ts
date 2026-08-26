@@ -187,5 +187,65 @@ export interface ItemPicking {
   creadoEn?: string;
 }
 
+export interface OrdenEntrega {
+  id: string;
+  codigo_entrega: string;
+  tipo_entrega: string;
+  cliente_nombre: string;
+  cliente_casillero?: string;
+  cliente_documento?: string;
+  receptor_nombre?: string;
+  receptor_documento?: string;
+  receptor_parentesco?: string;
+  operador_asignado: string;
+  estado: 'PENDIENTE_BUSQUEDA' | 'EN_BUSQUEDA' | 'LISTO_ENTREGA' | 'ENTREGADO';
+  total_paquetes: number;
+  paquetes_data: Array<{
+    id?: string;
+    numeroReciboBodega: string;
+    posicionEstante?: string;
+    pesoKg?: number;
+    descripcion?: string;
+    encontrado?: boolean;
+  }>;
+  fotos_evidencia: Array<{
+    url: string;
+    key?: string;
+    fileName?: string;
+    fecha?: string;
+  }>;
+  notas?: string;
+  creado_en: string;
+  entregado_en?: string;
+}
+
+export interface CobroVoucher {
+  id: string;
+  codigo_cobro: string;
+  cliente_nombre: string;
+  cliente_casillero?: string;
+  cliente_telefono?: string;
+  monto: number;
+  moneda: 'PEN' | 'USD';
+  metodo_pago: 'YAPE' | 'PLIN' | 'BCP' | 'INTERBANK' | 'BBVA' | 'EFECTIVO' | 'OTRO';
+  numero_operacion?: string;
+  fecha_operacion?: string;
+  voucher_url: string;
+  voucher_key?: string;
+  paquetes_wrs: Array<{
+    id?: string;
+    numeroReciboBodega: string;
+    pesoKg?: number;
+    descripcion?: string;
+  }>;
+  estado: 'PENDIENTE' | 'VALIDADO' | 'RECHAZADO';
+  registrado_por: string;
+  validado_por?: string;
+  notas?: string;
+  creado_en: string;
+  validado_en?: string;
+}
+
+
 
 

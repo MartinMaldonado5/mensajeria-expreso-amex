@@ -1,26 +1,30 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Paquete, Cliente, TipoUbicacion, TipoMetodoEntrega, TipoEstadoEntrega, ScannedLog } from '@/types';
+import {
+  Paquete,
+  Cliente,
+  TipoUbicacion,
+  TipoMetodoEntrega,
+  TipoEstadoEntrega,
+  ScannedLog,
+  OrdenEntrega,
+  CobroVoucher
+} from '@/types';
 import { supabase } from '@/lib/supabase/client';
 import HeaderBar from '@/components/HeaderBar';
 import Sidebar from '@/components/Sidebar';
 import DashboardTab from '@/components/tabs/DashboardTab';
-import CustomersTab from '@/components/tabs/CustomersTab';
-import DniTab from '@/components/tabs/DniTab';
-import MiamiTab from '@/components/tabs/MiamiTab';
-import LiquidationsTab from '@/components/tabs/LiquidationsTab';
-import ScannerTab from '@/components/tabs/ScannerTab';
 import InventoryTab from '@/components/tabs/InventoryTab';
-import PickingTab from '@/components/tabs/PickingTab';
-import DeliveriesTab from '@/components/tabs/DeliveriesTab';
 import EntregasTab from '@/components/tabs/EntregasTab';
 import CobrosTab from '@/components/tabs/CobrosTab';
+import DeliveriesTab from '@/components/tabs/DeliveriesTab';
+import PickingTab from '@/components/tabs/PickingTab';
+import ScannerTab from '@/components/tabs/ScannerTab';
 import NewClientModal, { NewClientFormData } from '@/components/modals/NewClientModal';
 import NewPackageModal, { NewPkgFormData } from '@/components/modals/NewPackageModal';
 import ThermalLabelModal from '@/components/modals/ThermalLabelModal';
 import PdfViewerModal from '@/components/modals/PdfViewerModal';
-import DniImageModal from '@/components/modals/DniImageModal';
 import { PageSkeleton } from '@/components/ui/Skeleton';
 
 const EMPTY_CLIENT_FORM: NewClientFormData = {
@@ -56,7 +60,7 @@ const EMPTY_PKG_FORM: NewPkgFormData = {
 };
 
 export default function DashboardPage() {
-  const [activeTab, setActiveTabState] = useState<string>('mm-lince');
+  const [activeTab, setActiveTabState] = useState<string>('dashboard');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(true);
 
   useEffect(() => {
@@ -80,14 +84,6 @@ export default function DashboardPage() {
     setPaquetes(prev => prev.filter(p => p.id !== id));
   }, []);
 
-  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({
-    clientes: false,
-    almacenes: false,
-    despacho: false,
-    finanzas: false,
-    configuracion: false
-  });
-
   // Estado de usuario activo directo
   const [currentUser, setCurrentUser] = useState<{ nombre: string; rol: string } | null>({
     nombre: 'Operador Logístico AMEX',
@@ -100,9 +96,10 @@ export default function DashboardPage() {
 
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [paquetes, setPaquetes] = useState<Paquete[]>([]);
+  const [entregas, setEntregas] = useState<OrdenEntrega[]>([]);
+  const [cobros, setCobros] = useState<CobroVoucher[]>([]);
   const [scannedLogs, setScannedLogs] = useState<ScannedLog[]>([]);
   const [selectedPdfUrl, setSelectedPdfUrl] = useState<string | null>(null);
-  const [selectedDniImage, setSelectedDniImage] = useState<{ url: string; titulo: string; subtitulo: string } | null>(null);
   const [selectedThermalPkg, setSelectedThermalPkg] = useState<Paquete | null>(null);
   const [isNewClientModalOpen, setIsNewClientModalOpen] = useState(false);
   const [isNewPkgModalOpen, setIsNewPkgModalOpen] = useState(false);
@@ -130,9 +127,11 @@ export default function DashboardPage() {
   useEffect(() => {
     async function fetchSupabaseData() {
       try {
-        const [clientesRes, paquetesRes] = await Promise.all([
+        const [clientesRes, paquetesRes, entregasRes, cobrosRes] = await Promise.all([
           supabase.from('clientes').select('*').order('creado_en', { ascending: false }),
           supabase.from('paquetes').select('*').order('creado_en', { ascending: false }),
+          supabase.from('entregas_ordenes').select('*').order('creado_en', { ascending: false }),
+          supabase.from('cobros_vouchers').select('*').order('creado_en', { ascending: false })
         ]);
 
         const dbClientes = clientesRes.data || [];
@@ -180,6 +179,13 @@ export default function DashboardPage() {
             creadoEn: p.creado_en || ''
           };
         }));
+
+        if (entregasRes.data) {
+          setEntregas(entregasRes.data as OrdenEntrega[]);
+        }
+        if (cobrosRes.data) {
+          setCobros(cobrosRes.data as CobroVoucher[]);
+        }
       } catch (err) {
         console.warn('Supabase initial fetch sync:', err);
       } finally {
@@ -292,6 +298,14 @@ export default function DashboardPage() {
           setClientes(prev => prev.filter(item => item.id !== oldRecord.id));
         }
       })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'entregas_ordenes' }, async () => {
+        const { data } = await supabase.from('entregas_ordenes').select('*').order('creado_en', { ascending: false });
+        if (data) setEntregas(data as OrdenEntrega[]);
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'cobros_vouchers' }, async () => {
+        const { data } = await supabase.from('cobros_vouchers').select('*').order('creado_en', { ascending: false });
+        if (data) setCobros(data as CobroVoucher[]);
+      })
       .subscribe();
 
     return () => {
@@ -299,9 +313,6 @@ export default function DashboardPage() {
     };
   }, []);
 
-  const toggleModuleGroup = (groupKey: string) => {
-    setCollapsedGroups(prev => ({ ...prev, [groupKey]: !prev[groupKey] }));
-  };
 
   // 📍 Asignación de Ubicación Física a Paquete (Slotting WMS Persistente)
   const handleAssignPackageLocation = useCallback(async (code: string, location: string) => {
@@ -489,9 +500,7 @@ export default function DashboardPage() {
         <Sidebar
           activeTab={activeTab}
           isSidebarCollapsed={isSidebarCollapsed}
-          collapsedGroups={collapsedGroups}
           onSelectTab={setActiveTab}
-          onToggleGroup={toggleModuleGroup}
           onCloseSidebar={() => setIsSidebarCollapsed(true)}
         />
 
@@ -502,114 +511,71 @@ export default function DashboardPage() {
             <>
               {activeTab === 'dashboard' && (
                 <DashboardTab
-                  clientes={clientes}
                   paquetes={paquetes}
-                  filteredPaquetes={paquetes}
-                  onNewClient={() => setIsNewClientModalOpen(true)}
+                  clientes={clientes}
+                  entregas={entregas}
+                  cobros={cobros}
+                  onNavigateTab={setActiveTab}
                   onNewPackage={openNewPkgModal}
                   onPrintLabel={setSelectedThermalPkg}
                   onViewPdf={setSelectedPdfUrl}
                 />
               )}
 
-          {activeTab === 'sd-customers' && (
-            <CustomersTab
-              clientes={clientes}
-              onNewClient={() => setIsNewClientModalOpen(true)}
-              onViewDni={cli => {
-                if (cli.dniFrontalUrl) {
-                  setSelectedDniImage({ url: cli.dniFrontalUrl, titulo: 'DNI FRENTE', subtitulo: `${cli.codigoCasillero} - ${cli.nombre}` });
-                }
-              }}
-            />
-          )}
+              {(activeTab === 'mm-lince' || activeTab === 'mm-inventory') && (
+                <InventoryTab
+                  paquetes={paquetes}
+                  clientes={clientes}
+                  onNewPackage={openNewPkgModal}
+                  onViewPdf={setSelectedPdfUrl}
+                  onUpdatePackage={handleUpdatePackage}
+                  onDeletePackage={handleDeletePackage}
+                />
+              )}
 
-          {activeTab === 'sd-dni' && (
-            <DniTab clientes={clientes} onViewDniImage={setSelectedDniImage} />
-          )}
+              {activeTab === 'shp-entregas' && (
+                <EntregasTab
+                  paquetes={paquetes}
+                  clientes={clientes}
+                  onUpdatePackage={handleUpdatePackage}
+                  onViewPdf={setSelectedPdfUrl}
+                />
+              )}
 
-          {(activeTab === 'mm-lince' || activeTab === 'mm-inventory') && (
-            <InventoryTab
-              paquetes={paquetes}
-              clientes={clientes}
-              onNewPackage={openNewPkgModal}
-              onViewPdf={setSelectedPdfUrl}
-              onUpdatePackage={handleUpdatePackage}
-              onDeletePackage={handleDeletePackage}
-            />
-          )}
+              {activeTab === 'fico-cobros' && (
+                <CobrosTab
+                  paquetes={paquetes}
+                  clientes={clientes}
+                  onUpdatePackage={handleUpdatePackage}
+                />
+              )}
 
-          {activeTab === 'mm-miami' && (
-            <MiamiTab
-              paquetes={paquetes}
-              location="TibCourierMiami"
-              title="1. Almacén Tib Courier (Miami, USA)"
-              subtitle="Ingesta de compras con Guía WR#, Tipo Empaque e Invoices PDF en Cloudflare R2"
-              breadcrumb="Almacén Miami (USA)"
-              onNewPackage={openNewPkgModal}
-              onViewPdf={setSelectedPdfUrl}
-            />
-          )}
+              {activeTab === 'shp-deliveries' && (
+                <DeliveriesTab
+                  paquetes={paquetes}
+                  clientes={clientes}
+                  onUpdatePackage={handleUpdatePackage}
+                  onViewPdf={setSelectedPdfUrl}
+                />
+              )}
 
-          {activeTab === 'mm-tingo' && (
-            <MiamiTab
-              paquetes={paquetes}
-              location="TibTingoMaria"
-              title="2. Almacén Regional (Tingo María)"
-              subtitle="Control de sacas y paquetes en tránsito regional Tingo María"
-              breadcrumb="Almacén Tingo María"
-              onNewPackage={openNewPkgModal}
-              onViewPdf={setSelectedPdfUrl}
-            />
-          )}
+              {activeTab === 'wms-picking' && (
+                <PickingTab
+                  paquetes={paquetes}
+                  clientes={clientes}
+                />
+              )}
 
-          {activeTab === 'shp-entregas' && (
-            <EntregasTab
-              paquetes={paquetes}
-              clientes={clientes}
-              onUpdatePackage={handleUpdatePackage}
-              onViewPdf={setSelectedPdfUrl}
-            />
-          )}
-
-          {activeTab === 'fico-cobros' && (
-            <CobrosTab
-              paquetes={paquetes}
-              clientes={clientes}
-              onUpdatePackage={handleUpdatePackage}
-            />
-          )}
-
-          {activeTab === 'shp-deliveries' && (
-            <DeliveriesTab
-              paquetes={paquetes}
-              clientes={clientes}
-              onUpdatePackage={handleUpdatePackage}
-              onViewPdf={setSelectedPdfUrl}
-            />
-          )}
-
-          {activeTab === 'fico-liquidations' && (
-            <LiquidationsTab paquetes={paquetes} />
-          )}
-
-          {activeTab === 'mobile-scanner' && (
-            <ScannerTab
-              scannedLogs={scannedLogs}
-              paquetes={paquetes}
-              clientes={clientes}
-              onConfirm={handleScanCode}
-              onSlotPackage={handleAssignPackageLocation}
-              onUpdateLogs={setScannedLogs}
-            />
-          )}
-
-          {activeTab === 'wms-picking' && (
-            <PickingTab
-              paquetes={paquetes}
-              clientes={clientes}
-            />
-          )}
+              {activeTab === 'mobile-scanner' && (
+                <ScannerTab
+                  scannedLogs={scannedLogs}
+                  paquetes={paquetes}
+                  clientes={clientes}
+                  onConfirm={handleScanCode}
+                  onSlotPackage={handleAssignPackageLocation}
+                  onUpdateLogs={setScannedLogs}
+                />
+              )}
             </>
           )}
         </main>
@@ -622,7 +588,6 @@ export default function DashboardPage() {
           onClick={() => setIsSidebarCollapsed(true)}
         />
       )}
-
 
       {isNewClientModalOpen && (
         <NewClientModal
@@ -649,10 +614,6 @@ export default function DashboardPage() {
 
       {selectedPdfUrl && (
         <PdfViewerModal url={selectedPdfUrl} onClose={() => setSelectedPdfUrl(null)} />
-      )}
-
-      {selectedDniImage && (
-        <DniImageModal image={selectedDniImage} onClose={() => setSelectedDniImage(null)} />
       )}
     </div>
   );
