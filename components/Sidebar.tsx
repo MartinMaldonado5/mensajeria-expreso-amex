@@ -46,8 +46,8 @@ export default function Sidebar({
 
   return (
     <nav className={`sap-sidebar ${isSidebarCollapsed ? 'collapsed' : ''}`} aria-label="Menú principal de Operaciones y Almacenes">
-      {/* Encabezado Móvil con Botón Cerrar */}
-      <div className="sidebar-mobile-header" style={{ padding: '12px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid rgba(255, 255, 255, 0.1)' }}>
+      {/* Encabezado Móvil con Botón Cerrar (Oculto en PC vía CSS) */}
+      <div className="sidebar-mobile-header">
         <span style={{ fontSize: '13px', fontWeight: 900, color: '#f8fafc', display: 'flex', alignItems: 'center', gap: '8px' }}>
           <i className="fa-solid fa-warehouse" style={{ color: '#38bdf8' }}></i> Operaciones y Almacenes
         </span>
@@ -110,26 +110,6 @@ export default function Sidebar({
           {navItem('shp-deliveries', 'fa-solid fa-car-side', '5. Despacho Carro AMEX')}
           {navItem('wms-picking', 'fa-solid fa-clipboard-list', '6. Picking Shalom/Olva')}
           {navItem('mobile-scanner', 'fa-solid fa-barcode', '7. Escáner de Códigos')}
-        </div>
-      </div>
-
-      {/* FOOTER DEL SIDEBAR: ESTADO OPERATIVO */}
-      <div
-        style={{
-          marginTop: 'auto',
-          padding: '14px 12px',
-          borderTop: '1px solid rgba(255, 255, 255, 0.08)',
-          background: 'rgba(15, 23, 42, 0.5)',
-          fontSize: '11px',
-          color: '#94a3b8'
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#4ade80', fontWeight: 800, marginBottom: '2px' }}>
-          <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#22c55e', display: 'inline-block' }}></span>
-          Sincronización R2 & Supabase
-        </div>
-        <div style={{ fontSize: '10px', color: '#64748b' }}>
-          Plataforma Logística Perú (v2.5)
         </div>
       </div>
     </nav>

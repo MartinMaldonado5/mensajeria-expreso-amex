@@ -759,7 +759,7 @@ tr:hover { background: #f8fafc !important; }
     -webkit-overflow-scrolling: touch;
   }
   .sidebar-mobile-header {
-    display: flex;
+    display: flex !important;
     justify-content: space-between;
     align-items: center;
     padding: 6px 6px 14px 6px;
@@ -813,7 +813,7 @@ tr:hover { background: #f8fafc !important; }
 }
 
 .sidebar-mobile-header {
-  display: none;
+  display: none !important;
 }
 
 @media (max-width: 768px) {
