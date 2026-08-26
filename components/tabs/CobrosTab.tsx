@@ -29,6 +29,7 @@ import {
   Smartphone,
   Building,
   Image as ImageIcon,
+  Camera,
   Copy,
   FolderDown,
   RotateCw,
@@ -823,32 +824,76 @@ export default function CobrosTab({
                   <p style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>
                     Soporta capturas de pantalla, archivos JPG, PNG y fotos directas de WhatsApp Web
                   </p>
-                  <label
+                  <div
                     style={{
-                      display: 'inline-block',
-                      marginTop: '12px',
-                      padding: '8px 16px',
-                      background: '#ffffff',
-                      border: '1px solid #cbd5e1',
-                      borderRadius: '6px',
-                      fontSize: '12px',
-                      fontWeight: 800,
-                      color: '#334155',
-                      cursor: 'pointer'
+                      display: 'flex',
+                      flexWrap: 'wrap',
+                      justifyContent: 'center',
+                      gap: '10px',
+                      marginTop: '14px'
                     }}
                   >
-                    O seleccionar archivo del equipo
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={e => {
-                        if (e.target.files && e.target.files.length > 0) {
-                          processImageFile(e.target.files[0]);
-                        }
+                    {/* OPCIÓN 1: TOMAR FOTO CON CÁMARA */}
+                    <label
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        padding: '8px 16px',
+                        background: '#16a34a',
+                        color: '#ffffff',
+                        border: '1px solid #15803d',
+                        borderRadius: '6px',
+                        fontSize: '12px',
+                        fontWeight: 800,
+                        cursor: 'pointer'
                       }}
-                      style={{ display: 'none' }}
-                    />
-                  </label>
+                    >
+                      <Camera className="w-4 h-4" />
+                      📸 Tomar Foto con Celular
+                      <input
+                        type="file"
+                        accept="image/*"
+                        capture="environment"
+                        onChange={e => {
+                          if (e.target.files && e.target.files.length > 0) {
+                            processImageFile(e.target.files[0]);
+                          }
+                        }}
+                        style={{ display: 'none' }}
+                      />
+                    </label>
+
+                    {/* OPCIÓN 2: SELECCIONAR DESDE GALERÍA / ARCHIVOS */}
+                    <label
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        padding: '8px 16px',
+                        background: '#ffffff',
+                        border: '1px solid #cbd5e1',
+                        borderRadius: '6px',
+                        fontSize: '12px',
+                        fontWeight: 800,
+                        color: '#334155',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <ImageIcon className="w-4 h-4 text-blue-600" />
+                      🖼️ Elegir desde Galería / Archivos
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={e => {
+                          if (e.target.files && e.target.files.length > 0) {
+                            processImageFile(e.target.files[0]);
+                          }
+                        }}
+                        style={{ display: 'none' }}
+                      />
+                    </label>
+                  </div>
                 </div>
               )}
             </div>

@@ -1545,28 +1545,37 @@ export default function EntregasTab({
                   </code>
                 </p>
 
-                {/* BOTÓN DE CAPTURA / CÁMARA */}
-                <div style={{ marginBottom: '12px' }}>
+                {/* 2 OPCIONES CLARAS DE SUBIDA DE EVIDENCIA */}
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                    gap: '10px',
+                    marginBottom: '12px'
+                  }}
+                >
+                  {/* OPCIÓN 1: TOMAR FOTO CON CÁMARA */}
                   <label
                     style={{
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
                       gap: '8px',
-                      padding: '12px',
+                      padding: '12px 14px',
                       background: '#16a34a',
                       color: '#ffffff',
                       borderRadius: '8px',
                       fontWeight: 800,
+                      fontSize: '13px',
                       cursor: isUploadingPhoto ? 'not-allowed' : 'pointer',
-                      boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                      boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                      textAlign: 'center'
                     }}
                   >
                     <Camera className="w-5 h-5" />
-                    {isUploadingPhoto ? uploadProgress || 'Subiendo fotos a Cloudflare R2...' : '📸 Tomar Foto con Celular / Adjuntar Fotos'}
+                    📸 Tomar Foto con Cámara
                     <input
                       type="file"
-                      multiple
                       accept="image/*"
                       capture="environment"
                       onChange={handlePhotoUpload}
@@ -1574,7 +1583,55 @@ export default function EntregasTab({
                       style={{ display: 'none' }}
                     />
                   </label>
+
+                  {/* OPCIÓN 2: SUBIR / SELECCIONAR DESDE GALERÍA */}
+                  <label
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px',
+                      padding: '12px 14px',
+                      background: '#2563eb',
+                      color: '#ffffff',
+                      borderRadius: '8px',
+                      fontWeight: 800,
+                      fontSize: '13px',
+                      cursor: isUploadingPhoto ? 'not-allowed' : 'pointer',
+                      boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                      textAlign: 'center'
+                    }}
+                  >
+                    <ImageIcon className="w-5 h-5" />
+                    🖼️ Elegir desde Galería / Archivos
+                    <input
+                      type="file"
+                      multiple
+                      accept="image/*"
+                      onChange={handlePhotoUpload}
+                      disabled={isUploadingPhoto}
+                      style={{ display: 'none' }}
+                    />
+                  </label>
                 </div>
+
+                {isUploadingPhoto && (
+                  <div
+                    style={{
+                      padding: '10px 14px',
+                      background: '#ecfdf5',
+                      border: '1px solid #a7f3d0',
+                      borderRadius: '8px',
+                      color: '#065f46',
+                      fontSize: '12px',
+                      fontWeight: 800,
+                      marginBottom: '12px',
+                      textAlign: 'center'
+                    }}
+                  >
+                    ⏳ {uploadProgress || 'Subiendo fotos a Cloudflare R2...'}
+                  </div>
+                )}
 
                 {/* MINIATURAS DE FOTOS SUBIDAS */}
                 {uploadedPhotos.length > 0 && (
