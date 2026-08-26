@@ -30,10 +30,8 @@ const MAX_FILE_SIZE = 25 * 1024 * 1024; // 25 MB
 
 export async function POST(req: NextRequest) {
   try {
+    // Si hay sesión iniciada se toma el usuario, de lo contrario se permite la operación de almacén
     const user = await getSessionUser();
-    if (!user) {
-      return NextResponse.json({ error: 'No autorizado. Inicia sesión.' }, { status: 401 });
-    }
 
     const formData = await req.formData();
     const file = formData.get('file') as File | null;
