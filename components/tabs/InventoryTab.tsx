@@ -38,6 +38,7 @@ import { supabase } from '@/lib/supabase/client';
 import { TableSkeleton, MatrixSkeleton } from '@/components/ui/Skeleton';
 import ThermalLabelModal from '@/components/modals/ThermalLabelModal';
 import { TipoEstadoEntrega } from '@/types';
+import { matchesFuzzySearch } from '@/lib/fuzzySearch';
 import { exportPaquetesToExcel, exportKardexToExcel } from '@/lib/excelExport';
 
 interface InventoryTabProps {
@@ -264,23 +265,29 @@ export default function InventoryTab({
   ).length;
   const countLince = paquetes.filter(p => p.ubicacionActual === 'AmexLince').length;
 
-  // Filtrado reactivo de paquetes
+  // Filtrado reactivo de paquetes con Motor Fuzzy Inteligente
   const filteredPaquetes = useMemo(() => {
     return paquetes.filter(p => {
-      const q = searchTerm.trim().toLowerCase();
-      const matchesSearch =
-        !q ||
-        p.numeroReciboBodega?.toLowerCase().includes(q) ||
-        p.trackingUsa?.toLowerCase().includes(q) ||
-        p.codigoCasillero?.toLowerCase().includes(q) ||
-        p.nombreConsignatario?.toLowerCase().includes(q) ||
-        p.dniConsignatario?.toLowerCase().includes(q) ||
-        p.descripcion?.toLowerCase().includes(q) ||
-        p.posicionEstante?.toLowerCase().includes(q);
+      const pos = p.posicionEstante || (p.anaquel && p.piso ? `${p.anaquel}-${p.piso}` : 'REC');
+
+      const matchesSearch = matchesFuzzySearch(searchTerm, [
+        p.numeroReciboBodega,
+        p.trackingUsa,
+        p.codigoCasillero,
+        p.nombreConsignatario,
+        p.dniConsignatario,
+        p.descripcion,
+        p.posicionEstante,
+        p.anaquel,
+        p.piso,
+        pos,
+        p.numeroFactura,
+        p.tipoEmpaque,
+        p.estadoEntrega
+      ]);
 
       const matchesLocation = locationFilter === 'ALL' || p.ubicacionActual === locationFilter;
 
-      const pos = p.posicionEstante || (p.anaquel && p.piso ? `${p.anaquel}-${p.piso}` : 'REC');
       const matchesShelf =
         shelfFilter === 'ALL'
           ? true
@@ -297,18 +304,18 @@ export default function InventoryTab({
     });
   }, [paquetes, searchTerm, locationFilter, shelfFilter, floorFilter, packageTypeFilter, statusFilter]);
 
-  // Filtrado reactivo de Kardex
+  // Filtrado reactivo de Kardex con Motor Fuzzy
   const filteredKardex = useMemo(() => {
     return kardexList.filter(k => {
-      const q = kardexSearch.trim().toLowerCase();
-      const matchesSearch =
-        !q ||
-        k.codigoPaquete.toLowerCase().includes(q) ||
-        (k.consignatario && k.consignatario.toLowerCase().includes(q)) ||
-        k.origenDescripcion.toLowerCase().includes(q) ||
-        k.destinoDescripcion.toLowerCase().includes(q) ||
-        k.usuarioOperador.toLowerCase().includes(q) ||
-        (k.motivo && k.motivo.toLowerCase().includes(q));
+      const matchesSearch = matchesFuzzySearch(kardexSearch, [
+        k.codigoPaquete,
+        k.consignatario,
+        k.origenDescripcion,
+        k.destinoDescripcion,
+        k.usuarioOperador,
+        k.motivo,
+        k.tipoMovimiento
+      ]);
 
       const matchesType = kardexTypeFilter === 'ALL' || k.tipoMovimiento === kardexTypeFilter;
 

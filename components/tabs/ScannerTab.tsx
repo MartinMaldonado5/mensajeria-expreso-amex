@@ -31,6 +31,7 @@ import {
   FileSpreadsheet
 } from 'lucide-react';
 import { exportScannerLogsToExcel } from '@/lib/excelExport';
+import { matchesFuzzySearch } from '@/lib/fuzzySearch';
 import { Paquete, Cliente, ScannedLog } from '@/types';
 import { supabase } from '@/lib/supabase/client';
 
@@ -88,12 +89,13 @@ export default function ScannerTab({
 
   const filteredLogs = useMemo(() => {
     return scannedLogs.filter(log => {
-      const matchesSearch =
-        log.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        log.format.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (log.location && log.location.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (log.nombreConsignatario && log.nombreConsignatario.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (log.codigoCasillero && log.codigoCasillero.toLowerCase().includes(searchTerm.toLowerCase()));
+      const matchesSearch = matchesFuzzySearch(searchTerm, [
+        log.code,
+        log.format,
+        log.location,
+        log.nombreConsignatario,
+        log.codigoCasillero
+      ]);
 
       const matchesStatus =
         statusFilter === 'ALL'

@@ -29,6 +29,7 @@ import {
 import { Paquete, Cliente, TipoEstadoEntrega } from '@/types';
 import { supabase } from '@/lib/supabase/client';
 import { exportHojaDeRutaToExcel } from '@/lib/excelExport';
+import { matchesFuzzySearch } from '@/lib/fuzzySearch';
 import ThermalLabelModal from '@/components/modals/ThermalLabelModal';
 
 interface DeliveriesTabProps {
@@ -123,18 +124,21 @@ export default function DeliveriesTab({
     return Array.from(set).sort();
   }, [deliveryPackages]);
 
-  // Filtrado final
+  // Filtrado final con Motor Fuzzy Inteligente
   const filteredList = useMemo(() => {
     return deliveryPackages.filter(p => {
-      const s = searchTerm.toLowerCase().trim();
-      const matchesSearch = !s ||
-        p.numeroReciboBodega.toLowerCase().includes(s) ||
-        p.codigoCasillero.toLowerCase().includes(s) ||
-        (p.nombreConsignatario && p.nombreConsignatario.toLowerCase().includes(s)) ||
-        (p.dniConsignatario && p.dniConsignatario.toLowerCase().includes(s)) ||
-        (p.cliente?.telefono && p.cliente.telefono.includes(s)) ||
-        (p.cliente?.direccionEntrega && p.cliente.direccionEntrega.toLowerCase().includes(s)) ||
-        (p.cliente?.distrito && p.cliente.distrito.toLowerCase().includes(s));
+      const matchesSearch = matchesFuzzySearch(searchTerm, [
+        p.numeroReciboBodega,
+        p.codigoCasillero,
+        p.nombreConsignatario,
+        p.dniConsignatario,
+        p.cliente?.nombre,
+        p.cliente?.telefono,
+        p.cliente?.direccionEntrega,
+        p.cliente?.distrito,
+        p.trackingUsa,
+        p.posicionEstante
+      ]);
 
       const matchesDistrict = districtFilter === 'ALL' ||
         (p.cliente?.distrito && p.cliente.distrito.trim() === districtFilter);

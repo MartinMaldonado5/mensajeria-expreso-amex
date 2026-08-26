@@ -33,6 +33,7 @@ import {
 import { Paquete, Cliente, OrdenPicking, ItemPicking, TipoEstadoPicking } from '@/types';
 import { supabase } from '@/lib/supabase/client';
 import { exportPickingOrderToExcel } from '@/lib/excelExport';
+import { matchesFuzzySearch } from '@/lib/fuzzySearch';
 
 interface PickingTabProps {
   paquetes: Paquete[];
@@ -197,14 +198,16 @@ export default function PickingTab({
     .filter(o => o.estado !== 'DESPACHADO')
     .reduce((acc, o) => acc + (o.totalPaquetes - o.recolectadosPaquetes), 0);
 
-  // Filtrado de órdenes
+  // Filtrado de órdenes con Motor Fuzzy Inteligente
   const filteredOrders = useMemo(() => {
     return ordenes.filter(o => {
-      const matchesSearch =
-        o.codigoOrden.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        o.transportistaAgencia.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        o.operadorAsignado.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        o.destinoCiudad.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesSearch = matchesFuzzySearch(searchTerm, [
+        o.codigoOrden,
+        o.transportistaAgencia,
+        o.operadorAsignado,
+        o.destinoCiudad,
+        o.notas
+      ]);
 
       const matchesStatus =
         statusFilter === 'ALL'

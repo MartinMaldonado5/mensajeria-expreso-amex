@@ -34,6 +34,7 @@ import {
 import { Paquete, Cliente } from '@/types';
 import { supabase } from '@/lib/supabase/client';
 import { exportEntregasToExcel } from '@/lib/excelExport';
+import { matchesFuzzySearch } from '@/lib/fuzzySearch';
 
 export interface OrdenEntrega {
   id: string;
@@ -170,19 +171,36 @@ export default function EntregasTab({
     };
   }, []);
 
-  // 2. Filtrado de órdenes
+  // 2. Filtrado de órdenes con Motor Fuzzy Inteligente
   const filteredOrdenes = useMemo(() => {
     return ordenes.filter(o => {
-      const matchSearch =
-        searchTerm === '' ||
-        o.codigo_entrega?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        o.cliente_nombre?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        o.cliente_casillero?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        o.receptor_nombre?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (Array.isArray(o.paquetes_data) &&
-          o.paquetes_data.some(p => p.numeroReciboBodega?.toLowerCase().includes(searchTerm.toLowerCase())));
+      const wrsString = Array.isArray(o.paquetes_data)
+        ? o.paquetes_data.map(p => p.numeroReciboBodega).join(' ')
+        : '';
+      const estantesString = Array.isArray(o.paquetes_data)
+        ? o.paquetes_data.map(p => p.posicionEstante || '').join(' ')
+        : '';
+
+      const matchSearch = matchesFuzzySearch(searchTerm, [
+        o.codigo_entrega,
+        o.cliente_nombre,
+        o.cliente_casillero,
+        o.cliente_documento,
+        o.receptor_nombre,
+        o.receptor_documento,
+        o.receptor_parentesco,
+        o.operador_asignado,
+        o.tipo_entrega,
+        o.notas,
+        wrsString,
+        estantesString
+      ]);
 
       if (!matchSearch) return false;
+
+      if (statusFilter !== 'ALL' && o.estado !== statusFilter) {
+        return false;
+      }
 
       if (subtab === 'activas') {
         return o.estado !== 'ENTREGADO';
@@ -191,7 +209,7 @@ export default function EntregasTab({
       }
       return true;
     });
-  }, [ordenes, searchTerm, subtab]);
+  }, [ordenes, searchTerm, subtab, statusFilter]);
 
   // Contadores de estados
   const metrics = useMemo(() => {
@@ -202,13 +220,19 @@ export default function EntregasTab({
     return { pendientes, enBusqueda, listos, entregados, total: ordenes.length };
   }, [ordenes]);
 
-  // Paquetes en almacén central Lince disponibles para entregar
+  // Paquetes en almacén central Lince disponibles para entregar con Motor Fuzzy
   const paquetesDisponibles = useMemo(() => {
     return paquetes.filter(p => {
-      const matchWR = wrSearchQuery === '' ||
-        p.numeroReciboBodega.toLowerCase().includes(wrSearchQuery.toLowerCase()) ||
-        (p.codigoCasillero && p.codigoCasillero.toLowerCase().includes(wrSearchQuery.toLowerCase())) ||
-        (p.nombreConsignatario && p.nombreConsignatario.toLowerCase().includes(wrSearchQuery.toLowerCase()));
+      const matchWR = matchesFuzzySearch(wrSearchQuery, [
+        p.numeroReciboBodega,
+        p.codigoCasillero,
+        p.nombreConsignatario,
+        p.dniConsignatario,
+        p.posicionEstante,
+        p.anaquel,
+        p.piso,
+        p.trackingUsa
+      ]);
 
       return matchWR && p.estadoEntrega !== 'Entregado';
     });
