@@ -61,12 +61,17 @@ const EMPTY_PKG_FORM: NewPkgFormData = {
 
 export default function DashboardPage() {
   const [activeTab, setActiveTabState] = useState<string>('dashboard');
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(true);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      setIsSidebarCollapsed(window.innerWidth <= 768);
-    }
+    const handleResize = () => {
+      if (typeof window !== 'undefined') {
+        setIsSidebarCollapsed(window.innerWidth <= 768);
+      }
+    };
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
   }, []);
 
   const setActiveTab = useCallback((tab: string) => {

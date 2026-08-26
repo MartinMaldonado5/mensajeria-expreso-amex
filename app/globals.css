@@ -89,27 +89,41 @@ body {
 }
 
 .sap-sidebar {
-  width: 280px;
+  width: 270px;
+  flex-shrink: 0;
   background: var(--sap-sidebar-bg);
   display: flex;
   flex-direction: column;
-  padding: 14px 12px;
+  padding: 14px 10px;
   gap: 6px;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   touch-action: pan-y;
   overscroll-behavior-y: contain;
-  transition: all 0.25s ease-in-out;
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
 }
 
-.sap-sidebar.collapsed {
-  width: 0;
-  padding: 0;
-  margin: 0;
-  overflow: hidden;
-  border: none;
-  opacity: 0;
-  pointer-events: none;
+@media (min-width: 769px) {
+  .sap-sidebar,
+  .sap-sidebar.collapsed {
+    width: 270px !important;
+    min-width: 270px !important;
+    max-width: 270px !important;
+    flex-shrink: 0 !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+    pointer-events: auto !important;
+    display: flex !important;
+    padding: 14px 10px !important;
+    margin: 0 !important;
+    border-right: 1px solid rgba(255, 255, 255, 0.08) !important;
+    position: relative !important;
+    height: 100% !important;
+  }
+
+  .header-sidebar-toggle {
+    display: none !important;
+  }
 }
 
 .sap-module-group {
@@ -782,6 +796,9 @@ tr:hover { background: #f8fafc !important; }
   }
   .header-logout-text {
     display: none;
+  }
+  .header-sidebar-toggle {
+    display: inline-flex !important;
   }
 }
 

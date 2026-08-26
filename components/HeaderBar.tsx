@@ -14,6 +14,7 @@ export default function HeaderBar({ currentUser, isSidebarCollapsed, onToggleSid
     <header className="sap-header">
       <div className="sap-brand">
         <button
+          className="header-sidebar-toggle"
           onClick={onToggleSidebar}
           style={{
             background: isSidebarCollapsed ? 'rgba(255,255,255,0.08)' : 'rgba(37, 99, 235, 0.4)',
@@ -24,7 +25,6 @@ export default function HeaderBar({ currentUser, isSidebarCollapsed, onToggleSid
             width: '36px',
             height: '36px',
             borderRadius: '8px',
-            display: 'inline-flex',
             alignItems: 'center',
             justifyContent: 'center',
             marginRight: '6px',
