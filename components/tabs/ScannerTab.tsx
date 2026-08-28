@@ -47,6 +47,7 @@ interface ScannerTabProps {
   onConfirm: (code: string, format: string, extra?: { mode: string; location?: string; anaquel?: string; piso?: string; pkg?: Paquete; cli?: Cliente }) => void;
   onSlotPackage?: (code: string, location: string) => void;
   onUpdateLogs?: React.Dispatch<React.SetStateAction<ScannedLog[]>>;
+  onRefreshData?: () => Promise<void> | void;
 }
 
 export default function ScannerTab({
@@ -55,7 +56,8 @@ export default function ScannerTab({
   clientes = [],
   onConfirm,
   onSlotPackage,
-  onUpdateLogs
+  onUpdateLogs,
+  onRefreshData
 }: ScannerTabProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'PENDING' | 'SYNCED'>('ALL');
@@ -576,6 +578,17 @@ export default function ScannerTab({
                 >
                   <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" /> Excel (.xlsx)
                 </button>
+
+                {onRefreshData && (
+                  <button
+                    onClick={onRefreshData}
+                    className="btn btn-secondary"
+                    style={{ height: '34px', padding: '0 8px', fontSize: '11.5px', borderRadius: '8px', fontWeight: 700, background: '#ffffff', border: '1px solid #cbd5e1', color: '#0f172a' }}
+                    title="Sincronizar base de datos con lector"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5 text-blue-600" /> Actualizar
+                  </button>
+                )}
               </div>
             </div>
 

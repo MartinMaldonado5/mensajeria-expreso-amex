@@ -17,7 +17,8 @@ import {
   TrendingUp,
   Store,
   Layers,
-  FileSpreadsheet
+  FileSpreadsheet,
+  RefreshCw
 } from 'lucide-react';
 import { Paquete, Cliente, OrdenEntrega, CobroVoucher } from '@/types';
 
@@ -30,6 +31,7 @@ interface DashboardTabProps {
   onNewPackage: () => void;
   onPrintLabel: (pkg: Paquete) => void;
   onViewPdf: (url: string) => void;
+  onRefreshData?: () => Promise<void> | void;
 }
 
 export default function DashboardTab({
@@ -40,8 +42,20 @@ export default function DashboardTab({
   onNavigateTab,
   onNewPackage,
   onPrintLabel,
-  onViewPdf
+  onViewPdf,
+  onRefreshData
 }: DashboardTabProps) {
+  const [isRefreshing, setIsRefreshing] = React.useState(false);
+
+  const handleRefresh = async () => {
+    if (!onRefreshData) return;
+    try {
+      setIsRefreshing(true);
+      await onRefreshData();
+    } finally {
+      setTimeout(() => setIsRefreshing(false), 500);
+    }
+  };
   // 1. Métricas de Almacén Central Lince
   const paquetesLince = useMemo(
     () => paquetes.filter(p => p.ubicacionActual === 'AmexLince' || p.estadoEntrega === 'EnAlmacen'),
@@ -186,6 +200,24 @@ export default function DashboardTab({
             }}
           >
             <ScanLine className="w-4 h-4 text-blue-600" /> Escáner de Códigos
+          </button>
+          <button
+            className="btn"
+            onClick={handleRefresh}
+            style={{
+              background: '#ffffff',
+              border: '1px solid #cbd5e1',
+              color: '#0f172a',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              fontWeight: 800,
+              cursor: 'pointer'
+            }}
+            title="Actualizar datos en vivo desde Supabase"
+          >
+            <RefreshCw className={`w-4 h-4 text-blue-600 ${isRefreshing ? 'animate-spin' : ''}`} />
+            <span>{isRefreshing ? 'Sincronizando...' : 'Actualizar'}</span>
           </button>
         </div>
       </div>

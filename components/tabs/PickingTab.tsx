@@ -1451,8 +1451,8 @@ export default function PickingTab({
                 </button>
               </div>
 
-              {/* LISTA ORDENADA INTELIGENTEMENTE POR ANAQUELES */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '340px', overflowY: 'auto' }}>
+              {/* LISTA ORDENADA INTELIGENTEMENTE POR ANAQUELES (DESPLAZAMIENTO FLUIDO) */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                 {Object.entries(
                   (itemsMap[activeExecutionOrder.id] || []).reduce((acc, item) => {
                     const shelf = item.ubicacionAnaquel.split('-')[0] || 'A1';

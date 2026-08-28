@@ -24,7 +24,8 @@ import {
   Package,
   Layers,
   X,
-  FileText
+  FileText,
+  RefreshCw
 } from 'lucide-react';
 import { Paquete, Cliente, TipoEstadoEntrega } from '@/types';
 import { supabase } from '@/lib/supabase/client';
@@ -37,13 +38,15 @@ interface DeliveriesTabProps {
   clientes: Cliente[];
   onUpdatePackage?: (pkg: Paquete) => void;
   onViewPdf: (url: string) => void;
+  onRefreshData?: () => Promise<void> | void;
 }
 
 export default function DeliveriesTab({
   paquetes,
   clientes,
   onUpdatePackage,
-  onViewPdf
+  onViewPdf,
+  onRefreshData
 }: DeliveriesTabProps) {
   // Pestañas operativas: 'rutas' | 'mostrador' | 'historial'
   const [activeSubTab, setActiveSubTab] = useState<'rutas' | 'mostrador' | 'historial'>('rutas');
@@ -750,6 +753,29 @@ export default function DeliveriesTab({
               <option value="Entregado">Entregado</option>
             </select>
           </div>
+
+          {onRefreshData && (
+            <button
+              onClick={onRefreshData}
+              className="btn"
+              style={{
+                background: '#ffffff',
+                border: '1px solid #cbd5e1',
+                color: '#0f172a',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                fontWeight: 800,
+                fontSize: '12px',
+                height: '32px',
+                padding: '0 10px',
+                cursor: 'pointer'
+              }}
+              title="Sincronizar rutas y despachos"
+            >
+              <RefreshCw className="w-3.5 h-3.5 text-blue-600" /> Actualizar
+            </button>
+          )}
         </div>
       </div>
 

@@ -48,6 +48,7 @@ interface InventoryTabProps {
   onViewPdf: (url: string) => void;
   onUpdatePackage?: (updated: Paquete) => void;
   onDeletePackage?: (id: string) => void;
+  onRefreshData?: () => Promise<void> | void;
 }
 
 export default function InventoryTab({
@@ -56,7 +57,8 @@ export default function InventoryTab({
   onNewPackage,
   onViewPdf,
   onUpdatePackage,
-  onDeletePackage
+  onDeletePackage,
+  onRefreshData
 }: InventoryTabProps) {
   // Sub-pestañas: 'existencias' | 'movimientos' | 'matriz' | 'gestor'
   const [activeSubTab, setActiveSubTab] = useState<'existencias' | 'movimientos' | 'matriz' | 'gestor'>('existencias');
@@ -746,6 +748,26 @@ export default function InventoryTab({
             }}
           >
             <Clock className="w-4 h-4 text-teal-600" /> 🔄 Kardex Movimientos
+          </button>
+
+          <button
+            className="btn"
+            onClick={async () => {
+              if (onRefreshData) await onRefreshData();
+            }}
+            style={{
+              background: '#ffffff',
+              border: '1px solid #cbd5e1',
+              color: '#0f172a',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              fontWeight: 800,
+              cursor: 'pointer'
+            }}
+            title="Sincronizar inventario en vivo"
+          >
+            <RefreshCw className="w-4 h-4 text-blue-600" /> Actualizar
           </button>
 
           <button

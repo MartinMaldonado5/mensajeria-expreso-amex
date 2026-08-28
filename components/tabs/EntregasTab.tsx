@@ -1765,8 +1765,8 @@ export default function EntregasTab({
                 </button>
               </form>
 
-              {/* PASO 1: CHECKLIST DE PAQUETES EN ESTANTES */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '220px', overflowY: 'auto' }}>
+              {/* PASO 1: CHECKLIST DE PAQUETES EN ESTANTES (DESPLAZAMIENTO FLUIDO Y COMPLETO) */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 {Array.isArray(activePickingOrden.paquetes_data) &&
                   activePickingOrden.paquetes_data.map((p, idx) => {
                     const isFound = Boolean(pickingChecks[p.numeroReciboBodega]);

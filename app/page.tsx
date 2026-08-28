@@ -129,75 +129,79 @@ export default function DashboardPage() {
     }
   }, []);
 
-  useEffect(() => {
-    async function fetchSupabaseData() {
-      try {
-        const [clientesRes, paquetesRes, entregasRes, cobrosRes] = await Promise.all([
-          supabase.from('clientes').select('*').order('creado_en', { ascending: false }),
-          supabase.from('paquetes').select('*').order('creado_en', { ascending: false }),
-          supabase.from('entregas_ordenes').select('*').order('creado_en', { ascending: false }),
-          supabase.from('cobros_vouchers').select('*').order('creado_en', { ascending: false })
-        ]);
+  const [isGlobalRefreshing, setIsGlobalRefreshing] = useState(false);
 
-        const dbClientes = clientesRes.data || [];
-        setClientes(dbClientes.map(c => ({
-          id: c.id,
-          codigoCasillero: c.codigo_casillero,
-          nombre: c.nombre,
-          documentoIdentidad: c.documento_identidad,
-          telefono: c.telefono || '',
-          email: c.email || '',
-          departamento: c.departamento || 'LIMA',
-          provincia: c.provincia || 'LIMA',
-          distrito: c.distrito || 'LINCE',
-          direccionEntrega: c.direccion_entrega || '',
-          transportistaPreferido: c.transportista_preferido || 'CARRO AMEX',
-          agenciaDestino: c.agencia_destino || '',
-          dniFrontalUrl: c.dni_frontal_url || '',
-          dniReversoUrl: c.dni_reverso_url || '',
-          creadoEn: c.creado_en || ''
-        })));
+  const fetchSupabaseData = useCallback(async () => {
+    try {
+      setIsGlobalRefreshing(true);
+      const [clientesRes, paquetesRes, entregasRes, cobrosRes] = await Promise.all([
+        supabase.from('clientes').select('*').order('creado_en', { ascending: false }),
+        supabase.from('paquetes').select('*').order('creado_en', { ascending: false }),
+        supabase.from('entregas_ordenes').select('*').order('creado_en', { ascending: false }),
+        supabase.from('cobros_vouchers').select('*').order('creado_en', { ascending: false })
+      ]);
 
-        const dbPaquetes = paquetesRes.data || [];
-        setPaquetes(dbPaquetes.map(p => {
-          const pos = p.posicion_estante || (p.anaquel && p.piso ? `${p.anaquel}-${p.piso}` : 'REC');
-          const [ana, pis] = pos.includes('-') ? pos.split('-') : [pos, 'P1'];
-          return {
-            id: p.id,
-            codigoCasillero: p.codigo_casillero,
-            numeroReciboBodega: p.numero_recibo_bodega,
-            trackingUsa: p.tracking_usa,
-            tipoEmpaque: p.tipo_empaque || 'CAJA',
-            numeroFactura: p.numero_factura || '',
-            dniConsignatario: p.dni_consignatario || '',
-            nombreConsignatario: p.nombre_consignatario || '',
-            descripcion: p.descripcion || '',
-            pesoKg: Number(p.peso_kg || 0),
-            valorDeclaradoUsd: Number(p.valor_declarado_usd || 0),
-            ubicacionActual: (p.ubicacion_actual as TipoUbicacion) || 'TibCourierMiami',
-            anaquel: p.anaquel || ana,
-            piso: p.piso || pis,
-            posicionEstante: pos,
-            metodoEntrega: (p.metodo_entrega as TipoMetodoEntrega) || 'CarroAmexDomicilio',
-            estadoEntrega: (p.estado_entrega as TipoEstadoEntrega) || 'EnAlmacen',
-            facturaPdfUrl: p.factura_pdf_url || '',
-            creadoEn: p.creado_en || ''
-          };
-        }));
+      const dbClientes = clientesRes.data || [];
+      setClientes(dbClientes.map(c => ({
+        id: c.id,
+        codigoCasillero: c.codigo_casillero,
+        nombre: c.nombre,
+        documentoIdentidad: c.documento_identidad,
+        telefono: c.telefono || '',
+        email: c.email || '',
+        departamento: c.departamento || 'LIMA',
+        provincia: c.provincia || 'LIMA',
+        distrito: c.distrito || 'LINCE',
+        direccionEntrega: c.direccion_entrega || '',
+        transportistaPreferido: c.transportista_preferido || 'CARRO AMEX',
+        agenciaDestino: c.agencia_destino || '',
+        dniFrontalUrl: c.dni_frontal_url || '',
+        dniReversoUrl: c.dni_reverso_url || '',
+        creadoEn: c.creado_en || ''
+      })));
 
-        if (entregasRes.data) {
-          setEntregas(entregasRes.data as OrdenEntrega[]);
-        }
-        if (cobrosRes.data) {
-          setCobros(cobrosRes.data as CobroVoucher[]);
-        }
-      } catch (err) {
-        console.warn('Supabase initial fetch sync:', err);
-      } finally {
-        setIsLoadingInitialData(false);
+      const dbPaquetes = paquetesRes.data || [];
+      setPaquetes(dbPaquetes.map(p => {
+        const pos = p.posicion_estante || (p.anaquel && p.piso ? `${p.anaquel}-${p.piso}` : 'REC');
+        const [ana, pis] = pos.includes('-') ? pos.split('-') : [pos, 'P1'];
+        return {
+          id: p.id,
+          codigoCasillero: p.codigo_casillero,
+          numeroReciboBodega: p.numero_recibo_bodega,
+          trackingUsa: p.tracking_usa,
+          tipoEmpaque: p.tipo_empaque || 'CAJA',
+          numeroFactura: p.numero_factura || '',
+          dniConsignatario: p.dni_consignatario || '',
+          nombreConsignatario: p.nombre_consignatario || '',
+          descripcion: p.descripcion || '',
+          pesoKg: Number(p.peso_kg || 0),
+          valorDeclaradoUsd: Number(p.valor_declarado_usd || 0),
+          ubicacionActual: (p.ubicacion_actual as TipoUbicacion) || 'TibCourierMiami',
+          anaquel: p.anaquel || ana,
+          piso: p.piso || pis,
+          posicionEstante: pos,
+          metodoEntrega: (p.metodo_entrega as TipoMetodoEntrega) || 'CarroAmexDomicilio',
+          estadoEntrega: (p.estado_entrega as TipoEstadoEntrega) || 'EnAlmacen',
+          facturaPdfUrl: p.factura_pdf_url || '',
+          creadoEn: p.creado_en || ''
+        };
+      }));
+
+      if (entregasRes.data) {
+        setEntregas(entregasRes.data as OrdenEntrega[]);
       }
+      if (cobrosRes.data) {
+        setCobros(cobrosRes.data as CobroVoucher[]);
+      }
+    } catch (err) {
+      console.warn('Supabase initial fetch sync:', err);
+    } finally {
+      setIsLoadingInitialData(false);
+      setTimeout(() => setIsGlobalRefreshing(false), 400);
     }
+  }, []);
 
+  useEffect(() => {
     fetchSupabaseData();
 
     // ⚡ CANALES REALTIME WEBSOCKET (Supabase Realtime)
@@ -499,6 +503,8 @@ export default function DashboardPage() {
         isSidebarCollapsed={isSidebarCollapsed}
         onToggleSidebar={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
         onLogout={handleLogout}
+        onGlobalRefresh={fetchSupabaseData}
+        isRefreshing={isGlobalRefreshing}
       />
 
       <div className="app-container">
@@ -524,6 +530,7 @@ export default function DashboardPage() {
                   onNewPackage={openNewPkgModal}
                   onPrintLabel={setSelectedThermalPkg}
                   onViewPdf={setSelectedPdfUrl}
+                  onRefreshData={fetchSupabaseData}
                 />
               )}
 
@@ -535,6 +542,7 @@ export default function DashboardPage() {
                   onViewPdf={setSelectedPdfUrl}
                   onUpdatePackage={handleUpdatePackage}
                   onDeletePackage={handleDeletePackage}
+                  onRefreshData={fetchSupabaseData}
                 />
               )}
 
@@ -561,6 +569,7 @@ export default function DashboardPage() {
                   clientes={clientes}
                   onUpdatePackage={handleUpdatePackage}
                   onViewPdf={setSelectedPdfUrl}
+                  onRefreshData={fetchSupabaseData}
                 />
               )}
 
@@ -579,6 +588,7 @@ export default function DashboardPage() {
                   onConfirm={handleScanCode}
                   onSlotPackage={handleAssignPackageLocation}
                   onUpdateLogs={setScannedLogs}
+                  onRefreshData={fetchSupabaseData}
                 />
               )}
             </>
