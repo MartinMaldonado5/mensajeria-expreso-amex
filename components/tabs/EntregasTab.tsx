@@ -38,6 +38,7 @@ import { Paquete, Cliente } from '@/types';
 import { supabase } from '@/lib/supabase/client';
 import { exportEntregasToExcel } from '@/lib/excelExport';
 import { matchesFuzzySearch } from '@/lib/fuzzySearch';
+import PhotoViewerModal from '@/components/modals/PhotoViewerModal';
 
 export interface OrdenEntrega {
   id: string;
@@ -1894,15 +1895,17 @@ export default function EntregasTab({
                   </div>
                 )}
 
-                {/* MINIATURAS */}
+                {/* MINIATURAS MEJORADAS CON PREVIEW Y CLICK PARA VER GRANDE */}
                 {uploadedPhotos.length > 0 && (
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(70px, 1fr))', gap: '6px', marginTop: '6px' }}>
-                    {uploadedPhotos.map((photo, idx) => (
-                      <div key={idx} style={{ position: 'relative', borderRadius: '6px', overflow: 'hidden', height: '70px', border: '1px solid #cbd5e1' }}>
-                        <img
-                          src={photo.url}
-                          alt="Evidencia"
-                          style={{ width: '100%', height: '100%', objectFit: 'cover', cursor: 'pointer' }}
+                  <div style={{ marginTop: '10px' }}>
+                    <div style={{ fontSize: '11.5px', fontWeight: 800, color: '#334155', marginBottom: '6px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span>🖼️ Fotos Registradas ({uploadedPhotos.length}):</span>
+                      <span style={{ fontSize: '10.5px', color: '#2563eb', fontWeight: 700 }}>🔍 Click en cualquier foto para ver grande</span>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(88px, 1fr))', gap: '8px' }}>
+                      {uploadedPhotos.map((photo, idx) => (
+                        <div
+                          key={idx}
                           onClick={() =>
                             setPhotoViewerData({
                               codigo: activePickingOrden.codigo_entrega,
@@ -1911,31 +1914,92 @@ export default function EntregasTab({
                               currentIndex: idx
                             })
                           }
-                        />
-                        <button
-                          type="button"
-                          onClick={() => handleDeletePhoto(idx)}
                           style={{
-                            position: 'absolute',
-                            top: '2px',
-                            right: '2px',
-                            background: 'rgba(239, 68, 68, 0.9)',
-                            border: 'none',
-                            color: '#ffffff',
-                            borderRadius: '50%',
-                            width: '18px',
-                            height: '18px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
+                            position: 'relative',
+                            borderRadius: '8px',
+                            overflow: 'hidden',
+                            height: '84px',
+                            border: '2px solid #cbd5e1',
+                            background: '#0f172a',
+                            boxShadow: '0 2px 6px rgba(0,0,0,0.08)',
                             cursor: 'pointer',
-                            fontSize: '10px'
+                            transition: 'transform 0.15s ease'
                           }}
                         >
-                          ✕
-                        </button>
-                      </div>
-                    ))}
+                          <img
+                            src={photo.url}
+                            alt="Evidencia"
+                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                          />
+                          
+                          {/* Badge de número de foto */}
+                          <span
+                            style={{
+                              position: 'absolute',
+                              bottom: '3px',
+                              left: '3px',
+                              background: 'rgba(0,0,0,0.75)',
+                              color: '#ffffff',
+                              fontSize: '9.5px',
+                              fontWeight: 900,
+                              padding: '1px 5px',
+                              borderRadius: '4px'
+                            }}
+                          >
+                            #{idx + 1}
+                          </span>
+
+                          {/* Botón de lupa */}
+                          <span
+                            style={{
+                              position: 'absolute',
+                              bottom: '3px',
+                              right: '3px',
+                              background: 'rgba(37, 99, 235, 0.9)',
+                              color: '#ffffff',
+                              borderRadius: '4px',
+                              padding: '1px 4px',
+                              fontSize: '9px',
+                              fontWeight: 800,
+                              display: 'flex',
+                              alignItems: 'center'
+                            }}
+                          >
+                            🔍 Ver
+                          </span>
+
+                          {/* Botón de eliminar */}
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeletePhoto(idx);
+                            }}
+                            style={{
+                              position: 'absolute',
+                              top: '3px',
+                              right: '3px',
+                              background: 'rgba(239, 68, 68, 0.92)',
+                              border: 'none',
+                              color: '#ffffff',
+                              borderRadius: '50%',
+                              width: '20px',
+                              height: '20px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              cursor: 'pointer',
+                              fontSize: '11px',
+                              fontWeight: 900,
+                              boxShadow: '0 2px 4px rgba(0,0,0,0.3)'
+                            }}
+                            title="Eliminar esta foto"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
@@ -2174,131 +2238,16 @@ export default function EntregasTab({
         </div>
       )}
 
-      {/* 🖼️ MODAL 3: VISOR DE GALERÍA FOTOGRÁFICA EN ALTA RESOLUCIÓN */}
+      {/* 🖼️ MODAL 3: VISOR DE GALERÍA FOTOGRÁFICA EN ALTA RESOLUCIÓN CON ZOOM Y ROTACIÓN */}
       {photoViewerData && (
-        <div className="modal-backdrop" onClick={() => setPhotoViewerData(null)}>
-          <div
-            className="modal-dialog"
-            onClick={e => e.stopPropagation()}
-            style={{
-              maxWidth: '850px',
-              width: '95%',
-              background: '#0f172a',
-              color: '#ffffff',
-              border: '1px solid #334155'
-            }}
-          >
-            <div className="modal-header" style={{ background: '#0f172a', borderBottom: '1px solid #334155' }}>
-              <div>
-                <span className="modal-title" style={{ color: '#ffffff' }}>
-                  📸 Evidencias de Entrega - {photoViewerData.codigo}
-                </span>
-                <span style={{ fontSize: '12px', color: '#94a3b8', display: 'block' }}>
-                  Cliente: {photoViewerData.cliente} (Foto {photoViewerData.currentIndex + 1} de {photoViewerData.fotos.length})
-                </span>
-              </div>
-              <button
-                onClick={() => setPhotoViewerData(null)}
-                style={{ background: 'none', border: 'none', fontSize: '22px', color: '#ffffff', cursor: 'pointer' }}
-              >
-                ✕
-              </button>
-            </div>
-
-            <div
-              className="modal-body"
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                background: '#020617',
-                minHeight: '380px',
-                padding: '10px'
-              }}
-            >
-              {photoViewerData.fotos[photoViewerData.currentIndex] ? (
-                <img
-                  src={photoViewerData.fotos[photoViewerData.currentIndex].url}
-                  alt="Foto evidencia"
-                  style={{
-                    maxHeight: '65vh',
-                    maxWidth: '100%',
-                    objectFit: 'contain',
-                    borderRadius: '8px'
-                  }}
-                />
-              ) : (
-                <div style={{ color: '#64748b' }}>No se pudo cargar la imagen</div>
-              )}
-            </div>
-
-            <div
-              className="modal-footer"
-              style={{
-                background: '#0f172a',
-                borderTop: '1px solid #334155',
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center'
-              }}
-            >
-              <button
-                className="btn"
-                disabled={photoViewerData.currentIndex === 0}
-                onClick={() =>
-                  setPhotoViewerData({
-                    ...photoViewerData,
-                    currentIndex: photoViewerData.currentIndex - 1
-                  })
-                }
-                style={{
-                  background: '#1e293b',
-                  color: '#ffffff',
-                  border: '1px solid #475569',
-                  opacity: photoViewerData.currentIndex === 0 ? 0.4 : 1
-                }}
-              >
-                ◀ Anterior
-              </button>
-
-              <a
-                href={photoViewerData.fotos[photoViewerData.currentIndex]?.url}
-                target="_blank"
-                rel="noreferrer"
-                style={{
-                  color: '#38bdf8',
-                  fontSize: '12px',
-                  fontWeight: 700,
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '4px',
-                  textDecoration: 'none'
-                }}
-              >
-                <ExternalLink className="w-4 h-4" /> Abrir en Cloudflare R2
-              </a>
-
-              <button
-                className="btn"
-                disabled={photoViewerData.currentIndex === photoViewerData.fotos.length - 1}
-                onClick={() =>
-                  setPhotoViewerData({
-                    ...photoViewerData,
-                    currentIndex: photoViewerData.currentIndex + 1
-                  })
-                }
-                style={{
-                  background: '#1e293b',
-                  color: '#ffffff',
-                  border: '1px solid #475569',
-                  opacity: photoViewerData.currentIndex === photoViewerData.fotos.length - 1 ? 0.4 : 1
-                }}
-              >
-                Siguiente ▶
-              </button>
-            </div>
-          </div>
-        </div>
+        <PhotoViewerModal
+          title={`📸 Evidencias de Entrega - ${photoViewerData.codigo}`}
+          subtitle={`Cliente: ${photoViewerData.cliente}`}
+          photos={photoViewerData.fotos}
+          initialIndex={photoViewerData.currentIndex}
+          onClose={() => setPhotoViewerData(null)}
+          onDeletePhoto={activePickingOrden ? handleDeletePhoto : undefined}
+        />
       )}
     </div>
   );
