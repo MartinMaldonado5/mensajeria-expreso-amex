@@ -28,7 +28,8 @@ import {
   ExternalLink,
   ChevronRight,
   PackageCheck,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Save
 } from 'lucide-react';
 import { Paquete, Cliente, OrdenPicking, ItemPicking, TipoEstadoPicking } from '@/types';
 import { supabase } from '@/lib/supabase/client';
@@ -57,6 +58,16 @@ export default function PickingTab({
   const [activeExecutionOrder, setActiveExecutionOrder] = useState<OrdenPicking | null>(null);
   const [manifestOrder, setManifestOrder] = useState<OrdenPicking | null>(null);
 
+  // Modal de Edición de Orden de Picking
+  const [editingOrder, setEditingOrder] = useState<OrdenPicking | null>(null);
+  const [editOrderAgencia, setEditOrderAgencia] = useState('SHALOM');
+  const [editOrderDestino, setEditOrderDestino] = useState('LIMA / PROVINCIAS');
+  const [editOrderOperador, setEditOrderOperador] = useState('Operador Logístico AMEX');
+  const [editOrderNotas, setEditOrderNotas] = useState('');
+  const [editOrderNewWrs, setEditOrderNewWrs] = useState('');
+  const [editOrderItems, setEditOrderItems] = useState<ItemPicking[]>([]);
+  const [isSavingEditOrder, setIsSavingEditOrder] = useState(false);
+
   // Estado del formulario de nueva orden
   const [newOrderAgencia, setNewOrderAgencia] = useState('SHALOM');
   const [newOrderDestino, setNewOrderDestino] = useState('LIMA / PROVINCIAS');
@@ -67,9 +78,9 @@ export default function PickingTab({
   const [selectedInventoryPkgIds, setSelectedInventoryPkgIds] = useState<string[]>([]);
   const [isCreatingOrder, setIsCreatingOrder] = useState(false);
 
-  // Escáner de cámara integrado para la ejecución de picking
-  const [isCameraActive, setIsCameraActive] = useState(false);
+  // Escáner integrado para la ejecución de picking
   const [scanFeedbackMessage, setScanFeedbackMessage] = useState<{ text: string; isError: boolean } | null>(null);
+  const [inModalScanInput, setInModalScanInput] = useState('');
 
   // Cargar órdenes e items desde Supabase
   const fetchPickingData = useCallback(async () => {
@@ -156,7 +167,7 @@ export default function PickingTab({
     };
   }, [fetchPickingData]);
 
-  // Sonidos de validación
+  // Sonidos de validación y vibración
   const playSound = (success: boolean) => {
     try {
       const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
@@ -229,7 +240,6 @@ export default function PickingTab({
   const pastedParsedItems = useMemo(() => {
     if (!rawPastedCodes.trim()) return [];
 
-    // Separar por comas, saltos de línea o espacios
     const tokens = rawPastedCodes
       .split(/[\n,;\t ]+/)
       .map(t => t.trim().toUpperCase())
@@ -238,7 +248,6 @@ export default function PickingTab({
     const uniqueTokens = Array.from(new Set(tokens));
 
     return uniqueTokens.map(token => {
-      // Buscar en el inventario
       const foundPkg = paquetes.find(
         p =>
           p.numeroReciboBodega.toUpperCase() === token ||
@@ -378,7 +387,7 @@ export default function PickingTab({
     }
   };
 
-  // MARCAR / DESMARCAR ITEM INDIVIDUAL EN PICKING
+  // MARCAR / DESMARCAR ITEM INDIVIDUAL EN PICKING CON PERSISTENCIA EN SUPABASE
   const handleToggleItemCollected = async (item: ItemPicking, order: OrdenPicking) => {
     const nextState = item.estadoItem === 'RECOLECTADO' ? 'PENDIENTE' : 'RECOLECTADO';
     const isCollected = nextState === 'RECOLECTADO';
@@ -387,7 +396,7 @@ export default function PickingTab({
     triggerHaptic(isCollected);
 
     try {
-      // 1. Actualizar item
+      // 1. Actualizar item en Supabase
       await supabase
         .from('items_picking')
         .update({
@@ -449,12 +458,11 @@ export default function PickingTab({
 
     const currentItems = itemsMap[activeExecutionOrder.id] || [];
 
-    // Buscar si el código coincide con algún item de la orden
     const matchedItem = currentItems.find(
       it =>
         it.codigoReciboBodega.toUpperCase() === clean ||
         it.trackingUsa?.toUpperCase() === clean ||
-        (clean.length >= 6 && it.codigoReciboBodega.toUpperCase().includes(clean))
+        (clean.length >= 5 && it.codigoReciboBodega.toUpperCase().includes(clean))
     );
 
     if (matchedItem) {
@@ -485,6 +493,126 @@ export default function PickingTab({
     }, 3500);
   };
 
+  // ✏️ ABRIR MODAL DE EDICIÓN DE ORDEN DE PICKING
+  const handleOpenEditPicking = (order: OrdenPicking) => {
+    setEditingOrder(order);
+    setEditOrderAgencia(order.transportistaAgencia || 'SHALOM');
+    setEditOrderDestino(order.destinoCiudad || 'LIMA / PROVINCIAS');
+    setEditOrderOperador(order.operadorAsignado || 'Operador Logístico AMEX');
+    setEditOrderNotas(order.notas || '');
+    setEditOrderNewWrs('');
+    setEditOrderItems(itemsMap[order.id] ? [...itemsMap[order.id]] : []);
+  };
+
+  // Remover item en edición
+  const handleRemoveItemFromEdit = async (itemId: string) => {
+    if (editOrderItems.length <= 1) {
+      alert('La orden de picking debe tener al menos 1 paquete.');
+      return;
+    }
+    setEditOrderItems(editOrderItems.filter(it => it.id !== itemId));
+  };
+
+  // GUARDAR EDICIÓN DE ORDEN DE PICKING
+  const handleSaveEditedPickingOrder = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingOrder) return;
+
+    try {
+      setIsSavingEditOrder(true);
+
+      // 1. Procesar posibles nuevos códigos WR agregados
+      let updatedItems = [...editOrderItems];
+      if (editOrderNewWrs.trim()) {
+        const tokens = editOrderNewWrs
+          .split(/[\n,;\t ]+/)
+          .map(t => t.trim().toUpperCase())
+          .filter(t => t.length > 0);
+
+        for (const token of tokens) {
+          if (!updatedItems.some(it => it.codigoReciboBodega.toUpperCase() === token)) {
+            const foundPkg = paquetes.find(p => p.numeroReciboBodega.toUpperCase() === token);
+            const foundCli = clientes.find(c => c.codigoCasillero === foundPkg?.codigoCasillero);
+
+            const newItem: ItemPicking = {
+              id: `item-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+              ordenPickingId: editingOrder.id,
+              paqueteId: foundPkg?.id,
+              codigoReciboBodega: token,
+              trackingUsa: foundPkg?.trackingUsa || '',
+              consignatario: foundCli?.nombre || foundPkg?.nombreConsignatario || 'Cliente',
+              dniConsignatario: foundCli?.documentoIdentidad || foundPkg?.dniConsignatario || '',
+              telefonoConsignatario: foundCli?.telefono || '',
+              ciudadDestino: editOrderDestino,
+              direccionDestino: foundCli?.direccionEntrega || '',
+              ubicacionAnaquel: foundPkg?.posicionEstante || (foundPkg?.anaquel ? `${foundPkg.anaquel}-${foundPkg.piso || 'P1'}` : 'A1-P1'),
+              estadoItem: 'PENDIENTE',
+              pesoKg: foundPkg?.pesoKg || 1.0,
+              creadoEn: new Date().toISOString()
+            };
+
+            // Insertar en Supabase `items_picking`
+            await supabase.from('items_picking').insert({
+              orden_picking_id: editingOrder.id,
+              paquete_id: newItem.paqueteId,
+              codigo_recibo_bodega: newItem.codigoReciboBodega,
+              tracking_usa: newItem.trackingUsa,
+              consignatario: newItem.consignatario,
+              dni_consignatario: newItem.dniConsignatario,
+              telefono_consignatario: newItem.telefonoConsignatario,
+              ciudad_destino: newItem.ciudadDestino,
+              direccion_destino: newItem.direccionDestino,
+              ubicacion_anaquel: newItem.ubicacionAnaquel,
+              estado_item: 'PENDIENTE',
+              peso_kg: newItem.pesoKg
+            });
+
+            updatedItems.push(newItem);
+          }
+        }
+      }
+
+      // 2. Eliminar items que se hayan quitado en el modal
+      const currentInDb = itemsMap[editingOrder.id] || [];
+      const removedIds = currentInDb.filter(dbIt => !updatedItems.some(u => u.id === dbIt.id)).map(x => x.id);
+      if (removedIds.length > 0) {
+        await supabase.from('items_picking').delete().in('id', removedIds);
+      }
+
+      // 3. Actualizar cabecera de la orden
+      const totalPkgs = updatedItems.length;
+      const recolectadosCount = updatedItems.filter(it => it.estadoItem === 'RECOLECTADO').length;
+      const nextState: TipoEstadoPicking =
+        recolectadosCount === totalPkgs && totalPkgs > 0
+          ? 'COMPLETADO'
+          : recolectadosCount > 0
+          ? 'EN_PROCESO'
+          : 'PENDIENTE';
+
+      await supabase
+        .from('ordenes_picking')
+        .update({
+          transportista_agencia: editOrderAgencia,
+          destino_ciudad: editOrderDestino,
+          operador_asignado: editOrderOperador,
+          notas: editOrderNotas,
+          total_paquetes: totalPkgs,
+          recolectados_paquetes: recolectadosCount,
+          estado: nextState
+        })
+        .eq('id', editingOrder.id);
+
+      alert(`✓ Orden de Picking ${editingOrder.codigoOrden} actualizada con éxito (${totalPkgs} paquetes).`);
+      setEditingOrder(null);
+      await fetchPickingData();
+    } catch (err) {
+      console.error('Error al editar orden de picking:', err);
+      alert('Error al actualizar la orden de picking.');
+    } finally {
+      setIsSavingEditOrder(false);
+    }
+  };
+
   // DESPACHAR ORDEN CONSOLIDADA (SHALOM / OLVA)
   const handleDispatchOrder = async (order: OrdenPicking) => {
     const currentItems = itemsMap[order.id] || [];
@@ -497,7 +625,6 @@ export default function PickingTab({
     }
 
     try {
-      // 1. Actualizar orden a DESPACHADO
       await supabase
         .from('ordenes_picking')
         .update({
@@ -506,7 +633,6 @@ export default function PickingTab({
         })
         .eq('id', order.id);
 
-      // 2. Actualizar estado de los paquetes en Supabase
       for (const item of currentItems) {
         if (item.paqueteId) {
           await supabase
@@ -517,6 +643,17 @@ export default function PickingTab({
             })
             .eq('id', item.paqueteId);
 
+          if (onUpdatePackage) {
+            const match = paquetes.find(p => p.id === item.paqueteId);
+            if (match) {
+              onUpdatePackage({
+                ...match,
+                estadoEntrega: 'Entregado',
+                ubicacionActual: 'Entregado'
+              });
+            }
+          }
+
           await supabase.from('historial_trazabilidad').insert({
             paquete_id: item.paqueteId,
             ubicacion: `Despachado a Agencia ${order.transportistaAgencia}`,
@@ -525,7 +662,6 @@ export default function PickingTab({
           });
         }
 
-        // Registrar en Kardex
         await supabase.from('movimientos_kardex').insert({
           paquete_id: item.paqueteId,
           codigo_paquete: item.codigoReciboBodega,
@@ -567,14 +703,14 @@ export default function PickingTab({
       </div>
 
       {/* KPI RIBBON DE ÓRDENES DE PICKING */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '10px' }}>
         <div
           onClick={() => setStatusFilter('ALL')}
           style={{
             background: statusFilter === 'ALL' ? '#eff6ff' : '#ffffff',
             border: statusFilter === 'ALL' ? '2px solid #2563eb' : '1px solid #e2e8f0',
             borderRadius: '12px',
-            padding: '14px',
+            padding: '12px 14px',
             cursor: 'pointer',
             boxShadow: '0 2px 6px rgba(0,0,0,0.04)'
           }}
@@ -593,7 +729,7 @@ export default function PickingTab({
             background: statusFilter === 'PENDING' ? '#fef3c7' : '#ffffff',
             border: statusFilter === 'PENDING' ? '2px solid #f59e0b' : '1px solid #e2e8f0',
             borderRadius: '12px',
-            padding: '14px',
+            padding: '12px 14px',
             cursor: 'pointer',
             boxShadow: '0 2px 6px rgba(0,0,0,0.04)'
           }}
@@ -611,7 +747,7 @@ export default function PickingTab({
             background: '#ffffff',
             border: '1px solid #e2e8f0',
             borderRadius: '12px',
-            padding: '14px',
+            padding: '12px 14px',
             boxShadow: '0 2px 6px rgba(0,0,0,0.04)'
           }}
         >
@@ -619,7 +755,7 @@ export default function PickingTab({
             <Layers className="w-4 h-4 text-red-600" /> Paquetes por Buscar
           </div>
           <div style={{ fontSize: '22px', fontWeight: 900, color: '#991b1b', marginTop: '4px' }}>
-            {totalPendingPackages} <span style={{ fontSize: '12px', fontWeight: 700 }}>en anaqueles</span>
+            {totalPendingPackages} <span style={{ fontSize: '12px', fontWeight: 700 }}>en estantes</span>
           </div>
         </div>
 
@@ -629,7 +765,7 @@ export default function PickingTab({
             background: statusFilter === 'COMPLETED' ? '#dcfce7' : '#ffffff',
             border: statusFilter === 'COMPLETED' ? '2px solid #16a34a' : '1px solid #e2e8f0',
             borderRadius: '12px',
-            padding: '14px',
+            padding: '12px 14px',
             cursor: 'pointer',
             boxShadow: '0 2px 6px rgba(0,0,0,0.04)'
           }}
@@ -657,15 +793,15 @@ export default function PickingTab({
             <button
               onClick={() => setIsNewOrderModalOpen(true)}
               className="btn btn-primary"
-              style={{ height: '36px', padding: '0 14px', fontSize: '12.5px', borderRadius: '8px', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '6px', background: '#2563eb' }}
+              style={{ height: '38px', padding: '0 14px', fontSize: '12.5px', borderRadius: '8px', fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: '6px', background: '#2563eb' }}
             >
-              <Plus className="w-4 h-4" /> Nueva Lista de Picking (Pegar WRs)
+              <Plus className="w-4 h-4" /> ➕ Nueva Lista de Picking (Pegar WRs)
             </button>
 
             <button
               onClick={fetchPickingData}
               className="btn btn-secondary"
-              style={{ height: '36px', padding: '0 10px', fontSize: '12px', borderRadius: '8px', fontWeight: 700 }}
+              style={{ height: '38px', padding: '0 10px', fontSize: '12px', borderRadius: '8px', fontWeight: 700 }}
               title="Actualizar datos"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
@@ -676,7 +812,7 @@ export default function PickingTab({
         {/* Buscador y Filtros */}
         <div style={{ padding: '0 16px 12px 16px', display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
           <div style={{ position: 'relative', flex: '1 1 240px' }}>
-            <Search className="w-4 h-4 text-slate-400" style={{ position: 'absolute', left: '10px', top: '10px' }} />
+            <Search className="w-4 h-4 text-slate-400" style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)' }} />
             <input
               type="text"
               placeholder="Buscar por código de orden, agencia (Shalom, Olva) u operador..."
@@ -684,7 +820,7 @@ export default function PickingTab({
               onChange={e => setSearchTerm(e.target.value)}
               style={{
                 width: '100%',
-                height: '36px',
+                height: '38px',
                 paddingLeft: '34px',
                 paddingRight: '12px',
                 borderRadius: '8px',
@@ -697,7 +833,7 @@ export default function PickingTab({
         </div>
 
         {/* LISTADO DE TARJETAS DE ÓRDENES */}
-        <div style={{ padding: '0 16px 16px 16px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 340px), 1fr))', gap: '14px' }}>
+        <div style={{ padding: '0 16px 16px 16px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 330px), 1fr))', gap: '12px' }}>
           {filteredOrders.length > 0 ? (
             filteredOrders.map(order => {
               const items = itemsMap[order.id] || [];
@@ -718,8 +854,7 @@ export default function PickingTab({
                     display: 'flex',
                     flexDirection: 'column',
                     justifyContent: 'space-between',
-                    gap: '12px',
-                    transition: 'all 0.15s ease'
+                    gap: '10px'
                   }}
                 >
                   <div>
@@ -758,12 +893,12 @@ export default function PickingTab({
                       </span>
                     </div>
 
-                    <div style={{ fontSize: '11.5px', color: '#64748b', marginBottom: '10px' }}>
+                    <div style={{ fontSize: '11.5px', color: '#64748b', marginBottom: '8px' }}>
                       📍 Destino: <strong>{order.destinoCiudad}</strong> · 👤 Operador: <strong>{order.operadorAsignado}</strong>
                     </div>
 
                     {/* Barra de progreso de recolección */}
-                    <div style={{ background: '#f1f5f9', padding: '8px 10px', borderRadius: '8px', border: '1px solid #e2e8f0', marginBottom: '10px' }}>
+                    <div style={{ background: '#f1f5f9', padding: '8px 10px', borderRadius: '8px', border: '1px solid #e2e8f0', marginBottom: '8px' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11.5px', fontWeight: 800, marginBottom: '4px' }}>
                         <span style={{ color: '#334155' }}>Progreso de Recolección:</span>
                         <span style={{ color: progressPct === 100 ? '#16a34a' : '#2563eb' }}>
@@ -792,21 +927,30 @@ export default function PickingTab({
                     </div>
                   </div>
 
-                  {/* Acciones de la tarjeta */}
-                  <div style={{ display: 'flex', gap: '6px', marginTop: '10px', borderTop: '1px solid #f1f5f9', paddingTop: '10px' }}>
+                  {/* Acciones de la tarjeta (ADAPTADAS PARA MÓVIL Y PC) */}
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '8px', borderTop: '1px solid #f1f5f9', paddingTop: '10px' }}>
                     <button
                       onClick={() => setActiveExecutionOrder(order)}
                       className="btn btn-primary"
-                      style={{ flex: 1.5, height: '36px', fontSize: '12px', fontWeight: 800, borderRadius: '8px', justifyContent: 'center', gap: '6px' }}
+                      style={{ flex: '1 1 120px', height: '38px', fontSize: '12px', fontWeight: 800, borderRadius: '8px', justifyContent: 'center', gap: '6px' }}
                     >
                       <Barcode className="w-4 h-4" />
-                      {order.estado === 'DESPACHADO' ? 'Ver Recolección' : 'Buscar / Escanear'}
+                      {order.estado === 'DESPACHADO' ? 'Ver Recolección' : 'Buscar / Recolectar'}
+                    </button>
+
+                    <button
+                      onClick={() => handleOpenEditPicking(order)}
+                      className="btn btn-secondary"
+                      style={{ flex: '1 1 100px', height: '38px', fontSize: '11.5px', fontWeight: 700, borderRadius: '8px', justifyContent: 'center', gap: '4px' }}
+                      title="Editar orden o agregar más WRs"
+                    >
+                      <Edit3 className="w-3.5 h-3.5 text-blue-600" /> Editar WRs
                     </button>
 
                     <button
                       onClick={() => setManifestOrder(order)}
                       className="btn btn-secondary"
-                      style={{ flex: 1, height: '36px', fontSize: '11.5px', fontWeight: 700, borderRadius: '8px', justifyContent: 'center', gap: '4px' }}
+                      style={{ flex: '1 1 90px', height: '38px', fontSize: '11.5px', fontWeight: 700, borderRadius: '8px', justifyContent: 'center', gap: '4px' }}
                       title="Ver Manifiesto de Despacho"
                     >
                       <FileText className="w-3.5 h-3.5" /> Manifiesto
@@ -815,7 +959,7 @@ export default function PickingTab({
                     <button
                       onClick={() => handleDeleteOrder(order.id)}
                       className="btn"
-                      style={{ width: '36px', height: '36px', borderRadius: '8px', background: '#fee2e2', color: '#dc2626', border: '1px solid #fecaca', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                      style={{ width: '38px', height: '38px', borderRadius: '8px', background: '#fee2e2', color: '#dc2626', border: '1px solid #fecaca', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                       title="Eliminar orden de picking"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
@@ -953,7 +1097,7 @@ export default function PickingTab({
                     rows={4}
                     value={rawPastedCodes}
                     onChange={e => setRawPastedCodes(e.target.value)}
-                    placeholder="WR-000451&#10;WR-000452&#10;WR-000458&#10;1Z999AA99999999"
+                    placeholder="WR-000451&#10;WR-000452&#10;WR-000458"
                     className="form-control"
                     style={{ fontFamily: 'monospace', fontSize: '13px', lineHeight: '1.4' }}
                     required
@@ -1054,7 +1198,152 @@ export default function PickingTab({
         </div>
       )}
 
-      {/* 📱 MODAL DE EJECUCIÓN MÓVIL DE RECOLECCIÓN (PARA OPERARIOS CON CELULAR O PISTOLA) */}
+      {/* ✏️ MODAL DE EDICIÓN DE ORDEN DE PICKING */}
+      {editingOrder && (
+        <div className="modal-backdrop">
+          <div className="modal-dialog" style={{ maxWidth: '600px', maxHeight: '92vh' }}>
+            <div className="modal-header">
+              <span className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#2563eb' }}>
+                <Edit3 className="w-5 h-5" /> Editar Lista de Picking ({editingOrder.codigoOrden})
+              </span>
+              <button
+                onClick={() => setEditingOrder(null)}
+                style={{ background: 'none', border: 'none', fontSize: '18px', cursor: 'pointer', color: '#64748b' }}
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEditedPickingOrder} className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div className="wms-modal-grid-2">
+                <div className="form-group">
+                  <label style={{ fontSize: '12px', fontWeight: 800, color: '#334155' }}>Agencia</label>
+                  <select
+                    value={editOrderAgencia}
+                    onChange={e => setEditOrderAgencia(e.target.value)}
+                    className="form-control"
+                  >
+                    <option value="SHALOM">🔴 SHALOM (Agencia / Provincia)</option>
+                    <option value="OLVA COURIER">🟡 OLVA COURIER (Nacional)</option>
+                    <option value="MARVISUR">🔵 MARVISUR (Carga Pesada)</option>
+                    <option value="CARRO AMEX LINCE">🟢 CARRO AMEX</option>
+                    <option value="AGENCIA PROVINCIA">🟣 OTRA AGENCIA</option>
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label style={{ fontSize: '12px', fontWeight: 800, color: '#334155' }}>Ciudad Destino</label>
+                  <input
+                    type="text"
+                    value={editOrderDestino}
+                    onChange={e => setEditOrderDestino(e.target.value)}
+                    className="form-control"
+                  />
+                </div>
+              </div>
+
+              <div className="wms-modal-grid-2">
+                <div className="form-group">
+                  <label style={{ fontSize: '12px', fontWeight: 800, color: '#334155' }}>Operador Responsable</label>
+                  <input
+                    type="text"
+                    value={editOrderOperador}
+                    onChange={e => setEditOrderOperador(e.target.value)}
+                    className="form-control"
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label style={{ fontSize: '12px', fontWeight: 800, color: '#334155' }}>Notas</label>
+                  <input
+                    type="text"
+                    value={editOrderNotas}
+                    onChange={e => setEditOrderNotas(e.target.value)}
+                    className="form-control"
+                  />
+                </div>
+              </div>
+
+              {/* LISTA ACTUAL DE ITEMS DE PICKING */}
+              <div>
+                <label style={{ fontSize: '12px', fontWeight: 800, color: '#334155', display: 'block', marginBottom: '6px' }}>
+                  📦 Paquetes en esta Lista ({editOrderItems.length}):
+                </label>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '160px', overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '6px' }}>
+                  {editOrderItems.map(item => (
+                    <div
+                      key={item.id}
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        padding: '6px 10px',
+                        background: '#f8fafc',
+                        borderRadius: '6px',
+                        border: '1px solid #e2e8f0'
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span style={{ fontWeight: 900, color: '#1e3a8a', fontFamily: 'monospace', fontSize: '13px' }}>
+                          {item.codigoReciboBodega}
+                        </span>
+                        <span style={{ fontSize: '11px', color: '#64748b' }}>
+                          📍 {item.ubicacionAnaquel}
+                        </span>
+                        <span style={{ fontSize: '11px', color: '#475569' }}>
+                          {item.consignatario}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveItemFromEdit(item.id)}
+                        style={{
+                          background: '#fee2e2',
+                          border: 'none',
+                          color: '#dc2626',
+                          borderRadius: '4px',
+                          padding: '2px 6px',
+                          fontSize: '11px',
+                          fontWeight: 800,
+                          cursor: 'pointer'
+                        }}
+                      >
+                        ✕ Quitar
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* AGREGAR MÁS WRS A LA LISTA */}
+              <div className="form-group">
+                <label style={{ fontSize: '12px', fontWeight: 800, color: '#334155' }}>
+                  ➕ Agregar más WRs (Pega códigos separados por coma o espacio):
+                </label>
+                <textarea
+                  rows={2}
+                  value={editOrderNewWrs}
+                  onChange={e => setEditOrderNewWrs(e.target.value)}
+                  placeholder="WR-000455, WR-000456"
+                  className="form-control"
+                  style={{ fontFamily: 'monospace', fontSize: '12px' }}
+                />
+              </div>
+
+              <div className="modal-footer" style={{ marginTop: '8px' }}>
+                <button type="button" onClick={() => setEditingOrder(null)} className="btn btn-secondary">
+                  Cancelar
+                </button>
+                <button type="submit" disabled={isSavingEditOrder} className="btn btn-primary" style={{ fontWeight: 800 }}>
+                  {isSavingEditOrder ? 'Guardando...' : '✓ Guardar Cambios'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 📱 MODAL DE EJECUCIÓN MÓVIL DE RECOLECCIÓN (OPERARIOS CON CELULAR O PISTOLA) */}
       {activeExecutionOrder && (
         <div className="modal-backdrop">
           <div className="modal-dialog" style={{ maxWidth: '640px', maxHeight: '94vh' }}>
@@ -1102,10 +1391,10 @@ export default function PickingTab({
               {scanFeedbackMessage && (
                 <div
                   style={{
-                    padding: '10px 14px',
+                    padding: '8px 12px',
                     borderRadius: '8px',
                     fontWeight: 800,
-                    fontSize: '12.5px',
+                    fontSize: '12px',
                     display: 'flex',
                     alignItems: 'center',
                     gap: '8px',
@@ -1122,15 +1411,17 @@ export default function PickingTab({
               {/* Entrada de escaneo rápido / pistola */}
               <div style={{ display: 'flex', gap: '8px' }}>
                 <div style={{ position: 'relative', flex: 1 }}>
-                  <Barcode className="w-4 h-4 text-blue-600" style={{ position: 'absolute', left: '10px', top: '11px' }} />
+                  <Barcode className="w-4 h-4 text-blue-600" style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)' }} />
                   <input
                     type="text"
                     placeholder="Pistolea o escribe código WR para marcar..."
+                    value={inModalScanInput}
+                    onChange={e => setInModalScanInput(e.target.value)}
                     onKeyDown={e => {
                       if (e.key === 'Enter') {
                         e.preventDefault();
-                        handleProcessBarcodeInPicking(e.currentTarget.value);
-                        e.currentTarget.value = '';
+                        handleProcessBarcodeInPicking(inModalScanInput);
+                        setInModalScanInput('');
                       }
                     }}
                     style={{
@@ -1140,17 +1431,28 @@ export default function PickingTab({
                       paddingRight: '10px',
                       borderRadius: '8px',
                       border: '1.5px solid #3b82f6',
-                      fontSize: '13px',
+                      fontSize: '12.5px',
                       fontFamily: 'JetBrains Mono, monospace',
                       fontWeight: 800,
                       outline: 'none'
                     }}
                   />
                 </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleProcessBarcodeInPicking(inModalScanInput);
+                    setInModalScanInput('');
+                  }}
+                  className="btn btn-primary"
+                  style={{ height: '38px', padding: '0 12px', fontSize: '12px', fontWeight: 800, borderRadius: '8px' }}
+                >
+                  ✓ Marcar
+                </button>
               </div>
 
-              {/* LISTA ORDENADA INTELIGENTEMENTE POR ANAQUELES (RUTA ÓPTIMA) */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', maxHeight: '380px', overflowY: 'auto' }}>
+              {/* LISTA ORDENADA INTELIGENTEMENTE POR ANAQUELES */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '340px', overflowY: 'auto' }}>
                 {Object.entries(
                   (itemsMap[activeExecutionOrder.id] || []).reduce((acc, item) => {
                     const shelf = item.ubicacionAnaquel.split('-')[0] || 'A1';
@@ -1160,14 +1462,13 @@ export default function PickingTab({
                   }, {} as Record<string, ItemPicking[]>)
                 ).map(([shelf, items]) => (
                   <div key={shelf} style={{ border: '1.5px solid #e2e8f0', borderRadius: '10px', overflow: 'hidden' }}>
-                    {/* Header del Anaquel */}
                     <div
                       style={{
                         background: shelf === 'A1' ? '#dbeafe' : shelf === 'A2' ? '#dcfce7' : '#fef3c7',
                         color: shelf === 'A1' ? '#1e40af' : shelf === 'A2' ? '#166534' : '#92400e',
                         padding: '8px 12px',
                         fontWeight: 900,
-                        fontSize: '12.5px',
+                        fontSize: '12px',
                         display: 'flex',
                         justifyContent: 'space-between',
                         alignItems: 'center'
@@ -1179,7 +1480,6 @@ export default function PickingTab({
                       </span>
                     </div>
 
-                    {/* Lista de paquetes de este estante */}
                     <div style={{ display: 'flex', flexDirection: 'column' }}>
                       {items.map(item => {
                         const isCollected = item.estadoItem === 'RECOLECTADO';
@@ -1190,7 +1490,7 @@ export default function PickingTab({
                               display: 'flex',
                               justifyContent: 'space-between',
                               alignItems: 'center',
-                              padding: '10px 12px',
+                              padding: '8px 12px',
                               borderBottom: '1px solid #f1f5f9',
                               background: isCollected ? '#f0fdf4' : '#ffffff',
                               gap: '8px'
@@ -1201,7 +1501,7 @@ export default function PickingTab({
                                 <span
                                   style={{
                                     fontFamily: 'JetBrains Mono, monospace',
-                                    fontSize: '13.5px',
+                                    fontSize: '13px',
                                     fontWeight: 900,
                                     color: isCollected ? '#166534' : '#0f172a',
                                     textDecoration: isCollected ? 'line-through' : 'none'
@@ -1212,9 +1512,9 @@ export default function PickingTab({
 
                                 <span
                                   style={{
-                                    fontSize: '11px',
+                                    fontSize: '10.5px',
                                     fontWeight: 900,
-                                    padding: '2px 6px',
+                                    padding: '1px 5px',
                                     borderRadius: '4px',
                                     background: isCollected ? '#86efac' : '#2563eb',
                                     color: '#ffffff',
@@ -1230,7 +1530,6 @@ export default function PickingTab({
                               </div>
                             </div>
 
-                            {/* Botón de recolección táctil */}
                             <button
                               onClick={() => handleToggleItemCollected(item, activeExecutionOrder)}
                               style={{
@@ -1238,7 +1537,7 @@ export default function PickingTab({
                                 color: isCollected ? '#ffffff' : '#334155',
                                 border: isCollected ? '1px solid #15803d' : '1px solid #cbd5e1',
                                 borderRadius: '8px',
-                                padding: '6px 12px',
+                                padding: '6px 10px',
                                 fontSize: '11.5px',
                                 fontWeight: 800,
                                 cursor: 'pointer',
@@ -1266,28 +1565,42 @@ export default function PickingTab({
               </div>
             </div>
 
-            <div className="modal-footer" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div className="modal-footer" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
               <button
                 type="button"
-                onClick={() => setManifestOrder(activeExecutionOrder)}
+                onClick={() => {
+                  setActiveExecutionOrder(null);
+                  alert('✓ Avance de recolección guardado exitosamente.');
+                }}
                 className="btn btn-secondary"
-                style={{ fontSize: '12px', fontWeight: 700 }}
+                style={{ fontSize: '12px', fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: '4px' }}
               >
-                <FileText className="w-4 h-4" /> Ver Manifiesto
+                <Save className="w-4 h-4 text-blue-600" /> Guardar y Salir
               </button>
 
-              <button
-                type="button"
-                onClick={() => handleDispatchOrder(activeExecutionOrder)}
-                className="btn btn-primary"
-                style={{
-                  background: activeExecutionOrder.recolectadosPaquetes === activeExecutionOrder.totalPaquetes ? '#16a34a' : '#2563eb',
-                  fontSize: '13px',
-                  fontWeight: 900
-                }}
-              >
-                🚚 Despachar a {activeExecutionOrder.transportistaAgencia}
-              </button>
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  onClick={() => setManifestOrder(activeExecutionOrder)}
+                  className="btn btn-secondary"
+                  style={{ fontSize: '12px', fontWeight: 700 }}
+                >
+                  <FileText className="w-4 h-4" /> Ver Manifiesto
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleDispatchOrder(activeExecutionOrder)}
+                  className="btn btn-primary"
+                  style={{
+                    background: activeExecutionOrder.recolectadosPaquetes === activeExecutionOrder.totalPaquetes ? '#16a34a' : '#2563eb',
+                    fontSize: '12.5px',
+                    fontWeight: 900
+                  }}
+                >
+                  🚚 Despachar a {activeExecutionOrder.transportistaAgencia}
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -1309,12 +1622,11 @@ export default function PickingTab({
               </button>
             </div>
 
-            <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              {/* Documento formal de despacho */}
-              <div style={{ border: '2px solid #0f172a', borderRadius: '10px', padding: '16px', background: '#ffffff' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '2px solid #0f172a', paddingBottom: '10px', marginBottom: '12px' }}>
+            <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div style={{ border: '2px solid #0f172a', borderRadius: '10px', padding: '14px', background: '#ffffff' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '2px solid #0f172a', paddingBottom: '8px', marginBottom: '10px' }}>
                   <div>
-                    <h2 style={{ fontSize: '16px', fontWeight: 900, color: '#0f172a', margin: 0 }}>
+                    <h2 style={{ fontSize: '15px', fontWeight: 900, color: '#0f172a', margin: 0 }}>
                       AMEX COURIER SAC
                     </h2>
                     <div style={{ fontSize: '11px', color: '#475569' }}>RUC: 20608912345 · Sede Central Lince, Lima</div>
@@ -1331,7 +1643,7 @@ export default function PickingTab({
                   </div>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '11.5px', marginBottom: '12px', background: '#f8fafc', padding: '8px', borderRadius: '6px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '11.5px', marginBottom: '10px', background: '#f8fafc', padding: '8px', borderRadius: '6px' }}>
                   <div>
                     <span>Total Bultos:</span> <strong>{manifestOrder.totalPaquetes} paquetes</strong>
                   </div>
@@ -1341,37 +1653,39 @@ export default function PickingTab({
                 </div>
 
                 {/* Tabla de bultos */}
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
-                  <thead>
-                    <tr style={{ background: '#f1f5f9', borderBottom: '1px solid #cbd5e1', color: '#334155', fontWeight: 800 }}>
-                      <th style={{ padding: '6px 8px', textAlign: 'left' }}>#</th>
-                      <th style={{ padding: '6px 8px', textAlign: 'left' }}>Guía WR</th>
-                      <th style={{ padding: '6px 8px', textAlign: 'left' }}>Destinatario</th>
-                      <th style={{ padding: '6px 8px', textAlign: 'left' }}>DNI / Tel</th>
-                      <th style={{ padding: '6px 8px', textAlign: 'left' }}>Ciudad</th>
-                      <th style={{ padding: '6px 8px', textAlign: 'center' }}>Estado</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(itemsMap[manifestOrder.id] || []).map((it, idx) => (
-                      <tr key={it.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                        <td style={{ padding: '6px 8px', color: '#64748b' }}>{idx + 1}</td>
-                        <td style={{ padding: '6px 8px', fontFamily: 'monospace', fontWeight: 800 }}>{it.codigoReciboBodega}</td>
-                        <td style={{ padding: '6px 8px' }}>{it.consignatario}</td>
-                        <td style={{ padding: '6px 8px', color: '#475569' }}>{it.dniConsignatario || it.telefonoConsignatario || '-'}</td>
-                        <td style={{ padding: '6px 8px', fontWeight: 700 }}>{it.ciudadDestino || 'Lima'}</td>
-                        <td style={{ padding: '6px 8px', textAlign: 'center' }}>
-                          <span style={{ color: it.estadoItem === 'RECOLECTADO' ? '#16a34a' : '#92400e', fontWeight: 800 }}>
-                            {it.estadoItem === 'RECOLECTADO' ? '✓ Listo' : 'Pendiente'}
-                          </span>
-                        </td>
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
+                    <thead>
+                      <tr style={{ background: '#f1f5f9', borderBottom: '1px solid #cbd5e1', color: '#334155', fontWeight: 800 }}>
+                        <th style={{ padding: '6px 8px', textAlign: 'left' }}>#</th>
+                        <th style={{ padding: '6px 8px', textAlign: 'left' }}>Guía WR</th>
+                        <th style={{ padding: '6px 8px', textAlign: 'left' }}>Destinatario</th>
+                        <th style={{ padding: '6px 8px', textAlign: 'left' }}>DNI / Tel</th>
+                        <th style={{ padding: '6px 8px', textAlign: 'left' }}>Ciudad</th>
+                        <th style={{ padding: '6px 8px', textAlign: 'center' }}>Estado</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {(itemsMap[manifestOrder.id] || []).map((it, idx) => (
+                        <tr key={it.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                          <td style={{ padding: '6px 8px', color: '#64748b' }}>{idx + 1}</td>
+                          <td style={{ padding: '6px 8px', fontFamily: 'monospace', fontWeight: 800 }}>{it.codigoReciboBodega}</td>
+                          <td style={{ padding: '6px 8px' }}>{it.consignatario}</td>
+                          <td style={{ padding: '6px 8px', color: '#475569' }}>{it.dniConsignatario || it.telefonoConsignatario || '-'}</td>
+                          <td style={{ padding: '6px 8px', fontWeight: 700 }}>{it.ciudadDestino || 'Lima'}</td>
+                          <td style={{ padding: '6px 8px', textAlign: 'center' }}>
+                            <span style={{ color: it.estadoItem === 'RECOLECTADO' ? '#16a34a' : '#92400e', fontWeight: 800 }}>
+                              {it.estadoItem === 'RECOLECTADO' ? '✓ Listo' : 'Pendiente'}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
 
                 {/* Firma de Recepción de la Agencia */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginTop: '36px', paddingTop: '10px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginTop: '28px', paddingTop: '10px' }}>
                   <div style={{ borderTop: '1px dashed #64748b', textAlign: 'center', fontSize: '11px', color: '#475569' }}>
                     Entregado por: Operador AMEX
                   </div>
@@ -1387,6 +1701,7 @@ export default function PickingTab({
                 type="button"
                 onClick={() => setManifestOrder(null)}
                 className="btn btn-secondary"
+                style={{ fontSize: '12px' }}
               >
                 Cerrar
               </button>
@@ -1394,7 +1709,7 @@ export default function PickingTab({
                 type="button"
                 onClick={() => exportPickingOrderToExcel(manifestOrder, itemsMap[manifestOrder.id] || [])}
                 className="btn"
-                style={{ fontWeight: 800, display: 'flex', alignItems: 'center', gap: '6px', background: '#f0fdf4', border: '1px solid #bbf7d0', color: '#166534' }}
+                style={{ fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: '6px', background: '#f0fdf4', border: '1px solid #bbf7d0', color: '#166534', fontSize: '12px' }}
               >
                 <FileSpreadsheet className="w-4 h-4 text-emerald-600" /> Exportar Manifiesto Excel (.xlsx)
               </button>
@@ -1402,9 +1717,9 @@ export default function PickingTab({
                 type="button"
                 onClick={() => window.print()}
                 className="btn btn-primary"
-                style={{ fontWeight: 800, display: 'flex', alignItems: 'center', gap: '6px' }}
+                style={{ fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '12px' }}
               >
-                <Printer className="w-4 h-4" /> Imprimir / Guardar Manifiesto
+                <Printer className="w-4 h-4" /> Imprimir Manifiesto
               </button>
             </div>
           </div>

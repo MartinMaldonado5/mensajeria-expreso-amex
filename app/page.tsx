@@ -586,6 +586,63 @@ export default function DashboardPage() {
         </main>
       </div>
 
+      {/* Barra de Navegación Inferior para Celulares (Mobile Bottom Navigation) */}
+      <nav className="mobile-bottom-nav" aria-label="Navegación Móvil de Almacén">
+        <button
+          type="button"
+          onClick={() => setActiveTab('dashboard')}
+          className={`mobile-nav-btn ${activeTab === 'dashboard' ? 'active' : ''}`}
+        >
+          <i className="fa-solid fa-chart-pie"></i>
+          <span>Panel</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('mm-lince')}
+          className={`mobile-nav-btn ${activeTab === 'mm-lince' || activeTab === 'mm-inventory' ? 'active' : ''}`}
+        >
+          <i className="fa-solid fa-store"></i>
+          <span>Lince</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('shp-entregas')}
+          className={`mobile-nav-btn ${activeTab === 'shp-entregas' ? 'active' : ''}`}
+        >
+          <i className="fa-solid fa-box-open"></i>
+          <span>Entregas WR</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('wms-picking')}
+          className={`mobile-nav-btn ${activeTab === 'wms-picking' ? 'active' : ''}`}
+        >
+          <i className="fa-solid fa-clipboard-list"></i>
+          <span>Picking</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('mobile-scanner')}
+          className={`mobile-nav-btn ${activeTab === 'mobile-scanner' ? 'active' : ''}`}
+        >
+          <i className="fa-solid fa-barcode"></i>
+          <span>Escáner</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setIsSidebarCollapsed(false)}
+          className="mobile-nav-btn"
+        >
+          <i className="fa-solid fa-bars"></i>
+          <span>Menú</span>
+        </button>
+      </nav>
+
       {/* Backdrop para cerrar el menú lateral en móviles */}
       {!isSidebarCollapsed && (
         <div
