@@ -28,7 +28,7 @@ export interface Paquete {
   clienteId?: string;
   embarqueId?: string;
   codigoCasillero: string;
-  numeroReciboBodega: string;        // Ej: WR-000451
+  numeroReciboBodega: string;        // Ej: WR000451
   trackingUsa: string;
   tipoEmpaque: string;               // CAJA, SOBRE, SACA
   numeroFactura?: string;
@@ -125,7 +125,7 @@ export interface EstanteriaPosicion {
 export interface MovimientoKardex {
   id: string;
   paqueteId?: string;
-  codigoPaquete: string;             // WR-000451
+  codigoPaquete: string;             // WR000451
   consignatario?: string;
   origenDescripcion: string;
   destinoDescripcion: string;
@@ -172,7 +172,7 @@ export interface ItemPicking {
   id: string;
   ordenPickingId: string;
   paqueteId?: string;
-  codigoReciboBodega: string;        // Ej: WR-000451
+  codigoReciboBodega: string;        // Ej: WR000451
   trackingUsa?: string;
   consignatario?: string;
   dniConsignatario?: string;

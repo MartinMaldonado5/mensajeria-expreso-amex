@@ -42,7 +42,7 @@ const EMPTY_CLIENT_FORM: NewClientFormData = {
 
 const EMPTY_PKG_FORM: NewPkgFormData = {
   codigoCasillero: 'AMEX-PER-1001',
-  numeroReciboBodega: 'WR-000000',
+  numeroReciboBodega: 'WR000000',
   trackingUsa: '',
   tipoEmpaque: 'CAJA',
   numeroFactura: '',
@@ -443,7 +443,7 @@ export default function DashboardPage() {
   const openNewPkgModal = () => {
     setNewPkgForm({
       ...EMPTY_PKG_FORM,
-      numeroReciboBodega: `WR-${Math.floor(100000 + Math.random() * 900000)}`
+      numeroReciboBodega: `WR${Math.floor(100000 + Math.random() * 900000)}`
     });
     setIsNewPkgModalOpen(true);
   };

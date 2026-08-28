@@ -60,7 +60,7 @@ export default function NewPackageModal({ form, clientes, onChange, onSave, onCl
                   <div className="pkg-section__title"><i className="fa-solid fa-barcode"></i> Identificación del paquete</div>
                   <div className="pkg-field">
                     <label className="pkg-label">Guía WR # (recibo de bodega)</label>
-                    <input type="text" required className="pkg-input pkg-input--mono" value={form.numeroReciboBodega} onChange={e => set('numeroReciboBodega', e.target.value)} placeholder="WR-000451" />
+                    <input type="text" required className="pkg-input pkg-input--mono" value={form.numeroReciboBodega} onChange={e => set('numeroReciboBodega', e.target.value)} placeholder="WR000451" />
                   </div>
                   <div className="pkg-field">
                     <label className="pkg-label">Tracking USA</label>
@@ -201,7 +201,7 @@ export default function NewPackageModal({ form, clientes, onChange, onSave, onCl
                     <span className="pkg-receipt__origin">MIA → LIM</span>
                   </div>
                   <div className="pkg-receipt__body">
-                    <div className="pkg-receipt__wr">{form.numeroReciboBodega || 'WR-······'}</div>
+                    <div className="pkg-receipt__wr">{form.numeroReciboBodega || 'WR······'}</div>
                     <div className="pkg-receipt__row">
                       <span className="pkg-receipt__k">Tracking</span>
                       <span className={`pkg-receipt__v ${form.trackingUsa ? '' : 'pkg-receipt__v--empty'}`}>{form.trackingUsa || 'Pendiente'}</span>

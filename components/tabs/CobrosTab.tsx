@@ -1122,7 +1122,7 @@ export default function CobrosTab({
               </label>
               <input
                 type="text"
-                placeholder="Ej: WR-10452, WR-10453"
+                placeholder="Ej: WR10452, WR10453"
                 value={formValues.wrInput}
                 onChange={e => setFormValues({ ...formValues, wrInput: e.target.value })}
                 className="form-control"

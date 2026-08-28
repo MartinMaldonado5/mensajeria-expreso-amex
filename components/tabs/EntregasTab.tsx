@@ -1625,7 +1625,7 @@ export default function EntregasTab({
               </label>
               <textarea
                 rows={2}
-                placeholder="WR-000451, WR-000452, WR-000453"
+                placeholder="WR000451, WR000452, WR000453"
                 value={newOrderForm.wrInput}
                 onChange={e => setNewOrderForm({ ...newOrderForm, wrInput: e.target.value })}
                 className="form-control"
@@ -2145,7 +2145,7 @@ export default function EntregasTab({
                   rows={2}
                   value={editForm.newWrInput}
                   onChange={e => setEditForm({ ...editForm, newWrInput: e.target.value })}
-                  placeholder="WR-000455, WR-000456"
+                  placeholder="WR000455, WR000456"
                   className="form-control"
                   style={{ fontFamily: 'monospace', fontSize: '12px' }}
                 />

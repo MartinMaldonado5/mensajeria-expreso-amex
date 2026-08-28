@@ -1097,7 +1097,7 @@ export default function PickingTab({
                     rows={4}
                     value={rawPastedCodes}
                     onChange={e => setRawPastedCodes(e.target.value)}
-                    placeholder="WR-000451&#10;WR-000452&#10;WR-000458"
+                    placeholder="WR000451&#10;WR000452&#10;WR000458"
                     className="form-control"
                     style={{ fontFamily: 'monospace', fontSize: '13px', lineHeight: '1.4' }}
                     required
@@ -1324,7 +1324,7 @@ export default function PickingTab({
                   rows={2}
                   value={editOrderNewWrs}
                   onChange={e => setEditOrderNewWrs(e.target.value)}
-                  placeholder="WR-000455, WR-000456"
+                  placeholder="WR000455, WR000456"
                   className="form-control"
                   style={{ fontFamily: 'monospace', fontSize: '12px' }}
                 />

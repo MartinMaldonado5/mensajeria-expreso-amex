@@ -243,7 +243,7 @@ export default function ScannerTab({
           });
         } else {
           // Insertar nuevo paquete si no existía
-          const newWr = upper.startsWith('WR-') ? upper : `WR-${upper.slice(-6)}`;
+          const newWr = upper.startsWith('WR') ? upper : `WR${upper.slice(-6)}`;
           await supabase.from('paquetes').insert({
             codigo_casillero: log.codigoCasillero || 'AMEX-PER-1001',
             numero_recibo_bodega: newWr,
