@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  X,
   ChevronLeft,
   ChevronRight,
   ZoomIn,
@@ -11,10 +10,10 @@ import {
   ExternalLink,
   Download,
   Trash2,
-  Maximize2,
   Camera,
-  Image as ImageIcon
+  AlertCircle
 } from 'lucide-react';
+import { getR2ViewUrl } from '@/lib/r2/client';
 
 export interface PhotoItem {
   url: string;
@@ -45,14 +44,15 @@ export default function PhotoViewerModal({
   );
   const [zoomLevel, setZoomLevel] = useState<number>(1);
   const [rotation, setRotation] = useState<number>(0);
-  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [imageError, setImageError] = useState<boolean>(false);
 
   const currentPhoto = photos[currentIndex];
 
-  // Reset zoom & rotation when changing photos
+  // Reset zoom & rotation & error when changing photos
   useEffect(() => {
     setZoomLevel(1);
     setRotation(0);
+    setImageError(false);
   }, [currentIndex]);
 
   const handleNext = useCallback(() => {
@@ -91,13 +91,14 @@ export default function PhotoViewerModal({
     return null;
   }
 
+  const currentViewUrl = getR2ViewUrl(currentPhoto.url);
+  const downloadUrl = currentViewUrl
+    ? `${currentViewUrl}${currentViewUrl.includes('?') ? '&' : '?'}download=true`
+    : '';
+
   const handleZoomIn = () => setZoomLevel(z => Math.min(z + 0.25, 3));
   const handleZoomOut = () => setZoomLevel(z => Math.max(z - 0.25, 0.5));
   const handleRotate = () => setRotation(r => (r + 90) % 360);
-  const handleReset = () => {
-    setZoomLevel(1);
-    setRotation(0);
-  };
 
   const handleDeleteCurrent = () => {
     if (!onDeletePhoto) return;
@@ -229,9 +230,35 @@ export default function PhotoViewerModal({
             <RotateCw className="w-4 h-4" />
           </button>
 
-          {/* Abrir enlace original R2 */}
+          {/* Descargar Imagen */}
+          {downloadUrl && (
+            <a
+              href={downloadUrl}
+              download={currentPhoto.fileName || `evidencia_${currentIndex + 1}.jpg`}
+              className="btn"
+              style={{
+                background: '#10b981',
+                border: 'none',
+                color: '#ffffff',
+                padding: '6px 12px',
+                fontSize: '12px',
+                borderRadius: '8px',
+                fontWeight: 800,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                textDecoration: 'none'
+              }}
+              title="Descargar imagen en alta calidad"
+            >
+              <Download className="w-4 h-4" />
+              <span className="hide-mobile">Descargar</span>
+            </a>
+          )}
+
+          {/* Abrir enlace R2 */}
           <a
-            href={currentPhoto.url}
+            href={currentViewUrl}
             target="_blank"
             rel="noreferrer"
             className="btn"
@@ -248,10 +275,10 @@ export default function PhotoViewerModal({
               gap: '6px',
               textDecoration: 'none'
             }}
-            title="Abrir imagen original de Cloudflare R2"
+            title="Abrir imagen en nueva pestaña"
           >
             <ExternalLink className="w-4 h-4" />
-            <span className="hide-mobile">Abrir R2</span>
+            <span className="hide-mobile">Abrir</span>
           </a>
 
           {/* Eliminar Foto */}
@@ -359,18 +386,59 @@ export default function PhotoViewerModal({
             transform: `scale(${zoomLevel}) rotate(${rotation}deg)`
           }}
         >
-          <img
-            src={currentPhoto.url}
-            alt={currentPhoto.fileName || `Foto ${currentIndex + 1}`}
-            style={{
-              maxWidth: '90vw',
-              maxHeight: '68vh',
-              objectFit: 'contain',
-              borderRadius: '10px',
-              boxShadow: '0 12px 40px rgba(0, 0, 0, 0.7)',
-              border: '1px solid rgba(255, 255, 255, 0.1)'
-            }}
-          />
+          {imageError ? (
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '12px',
+                padding: '40px',
+                background: 'rgba(15, 23, 42, 0.8)',
+                borderRadius: '12px',
+                border: '1px dashed #ef4444',
+                color: '#f87171'
+              }}
+            >
+              <AlertCircle className="w-12 h-12 text-red-400" />
+              <div style={{ fontSize: '15px', fontWeight: 700 }}>
+                No se pudo cargar la imagen desde el servidor R2
+              </div>
+              <div style={{ fontSize: '12px', color: '#94a3b8', maxWidth: '400px', textAlign: 'center' }}>
+                {currentPhoto.key || currentPhoto.url}
+              </div>
+              <button
+                type="button"
+                onClick={() => setImageError(false)}
+                className="btn"
+                style={{
+                  background: '#2563eb',
+                  color: '#ffffff',
+                  padding: '6px 14px',
+                  borderRadius: '6px',
+                  fontSize: '12px',
+                  marginTop: '8px'
+                }}
+              >
+                Reintentar Carga
+              </button>
+            </div>
+          ) : (
+            <img
+              src={currentViewUrl}
+              alt={currentPhoto.fileName || `Foto ${currentIndex + 1}`}
+              onError={() => setImageError(true)}
+              style={{
+                maxWidth: '90vw',
+                maxHeight: '68vh',
+                objectFit: 'contain',
+                borderRadius: '10px',
+                boxShadow: '0 12px 40px rgba(0, 0, 0, 0.7)',
+                border: '1px solid rgba(255, 255, 255, 0.1)'
+              }}
+            />
+          )}
         </div>
 
         {/* Flecha Siguiente */}
@@ -426,6 +494,7 @@ export default function PhotoViewerModal({
         >
           {photos.map((photo, idx) => {
             const isSelected = idx === currentIndex;
+            const thumbUrl = getR2ViewUrl(photo.url);
             return (
               <div
                 key={idx}
@@ -445,7 +514,7 @@ export default function PhotoViewerModal({
                 }}
               >
                 <img
-                  src={photo.url}
+                  src={thumbUrl}
                   alt={`Miniatura ${idx + 1}`}
                   style={{
                     width: '100%',

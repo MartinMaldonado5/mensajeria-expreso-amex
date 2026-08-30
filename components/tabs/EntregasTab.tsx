@@ -38,6 +38,7 @@ import { Paquete, Cliente } from '@/types';
 import { supabase } from '@/lib/supabase/client';
 import { exportEntregasToExcel } from '@/lib/excelExport';
 import { matchesFuzzySearch } from '@/lib/fuzzySearch';
+import { getR2ViewUrl } from '@/lib/r2/client';
 import PhotoViewerModal from '@/components/modals/PhotoViewerModal';
 
 export interface OrdenEntrega {
@@ -1927,7 +1928,7 @@ export default function EntregasTab({
                           }}
                         >
                           <img
-                            src={photo.url}
+                            src={getR2ViewUrl(photo.url)}
                             alt="Evidencia"
                             style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                           />

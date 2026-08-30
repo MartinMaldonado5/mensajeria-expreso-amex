@@ -40,6 +40,7 @@ import { Paquete, Cliente } from '@/types';
 import { supabase } from '@/lib/supabase/client';
 import { exportCobrosToExcel } from '@/lib/excelExport';
 import { matchesFuzzySearch } from '@/lib/fuzzySearch';
+import { getR2ViewUrl } from '@/lib/r2/client';
 
 export interface CobroVoucher {
   id: string;
@@ -1346,7 +1347,7 @@ export default function CobrosTab({
                         }}
                       >
                         <img
-                          src={cobro.voucher_url}
+                          src={getR2ViewUrl(cobro.voucher_url)}
                           alt="Voucher"
                           style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                         />
@@ -1571,7 +1572,7 @@ export default function CobrosTab({
               }}
             >
               <img
-                src={viewingVoucher.voucher_url}
+                src={getR2ViewUrl(viewingVoucher.voucher_url)}
                 alt="Comprobante"
                 style={{
                   maxHeight: '60vh',
@@ -1599,7 +1600,24 @@ export default function CobrosTab({
 
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <a
-                  href={viewingVoucher.voucher_url}
+                  href={`${getR2ViewUrl(viewingVoucher.voucher_url)}${getR2ViewUrl(viewingVoucher.voucher_url).includes('?') ? '&' : '?'}download=true`}
+                  download={`voucher_${viewingVoucher.codigo_cobro || 'pago'}.jpg`}
+                  style={{
+                    color: '#10b981',
+                    fontSize: '12px',
+                    fontWeight: 700,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    textDecoration: 'none',
+                    marginRight: '6px'
+                  }}
+                >
+                  <FolderDown className="w-4 h-4" /> Descargar
+                </a>
+
+                <a
+                  href={getR2ViewUrl(viewingVoucher.voucher_url)}
                   target="_blank"
                   rel="noreferrer"
                   style={{
@@ -1613,7 +1631,7 @@ export default function CobrosTab({
                     marginRight: '8px'
                   }}
                 >
-                  <ExternalLink className="w-4 h-4" /> Abrir en Cloudflare R2
+                  <ExternalLink className="w-4 h-4" /> Abrir Imagen
                 </a>
 
                 {viewingVoucher.estado === 'PENDIENTE' && (

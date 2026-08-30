@@ -86,11 +86,12 @@ export async function POST(req: NextRequest) {
       subPath = `documentos/${year}/${month}/${day}/${cleanName}`;
     }
 
-    const { url, key } = await uploadFileToR2(buffer, subPath, file.type || 'application/octet-stream');
+    const { url, publicUrl, key } = await uploadFileToR2(buffer, subPath, file.type || 'application/octet-stream');
 
     return NextResponse.json({
       success: true,
       url,
+      publicUrl,
       key,
       path: subPath,
       fileName: file.name,
