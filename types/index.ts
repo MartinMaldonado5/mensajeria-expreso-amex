@@ -245,7 +245,93 @@ export interface CobroVoucher {
   creado_en: string;
   validado_en?: string;
 }
+export type TipoProcesoCotejo =
+  | 'RECEPCION_GENERAL'
+  | 'RECEPCION_MIAMI'
+  | 'RECEPCION_LINCE'
+  | 'DESPACHO_RUTA'
+  | 'INVENTARIO_ANAQUEL'
+  | 'AUDITORIA'
+  | 'OTRO';
 
+export type TipoEstadoItemCotejo = 'PENDIENTE' | 'ESCANEADO' | 'NO_LISTADO' | 'OBSERVADO';
 
+export interface HojaCotejo {
+  id: string;
+  titulo: string;
+  descripcion?: string;
+  tipoProceso: TipoProcesoCotejo;
+  estado: 'EN_PROCESO' | 'COMPLETADO' | 'ARCHIVADO' | 'ACTIVA';
+  sedeId?: string;
+  creadoPor: string;
+  creadoEn: string;
+  actualizadoEn: string;
+  totalItems?: number;
+  escaneadosCount?: number;
+  noListadosCount?: number;
+}
 
+export interface ItemCotejo {
+  id: string;
+  hojaId: string;
+  codigoWr: string;
+  trackingUsa?: string;
+  casillero?: string;
+  consignatario?: string;
+  pesoKg?: number;
+  posicionEstante?: string;
+  notas?: string;
+  estado: TipoEstadoItemCotejo;
+  escaneadoEn?: string;
+  escaneadoPor?: string;
+  vecesEscaneado: number;
+  orden: number;
+  creadoEn: string;
+  actualizadoEn: string;
+  // UI helper fields
+  isJustScanned?: boolean;
+  scannedByPeer?: string;
+}
+
+export type EstadoHojaRuta = 'PLANIFICADA' | 'EN_RUTA' | 'COMPLETADA' | 'CANCELADA';
+export type EstadoDestinoRuta = 'PENDIENTE' | 'ENTREGADO' | 'NO_ATENDIO' | 'REPROGRAMADO';
+
+export interface DestinoRuta {
+  id: string;
+  hojaRutaId: string;
+  orden: number;
+  clienteNombre: string;
+  clienteCasillero?: string;
+  telefono: string;
+  direccion: string;
+  distrito: string;
+  referencia?: string;
+  codigosWrs: string[]; // List of WR codes: ["WR000451", "WR000452"]
+  cantidadPaquetes: number;
+  pesoTotalKg?: number;
+  montoCobrar?: number;
+  monedaCobro?: 'PEN' | 'USD';
+  notasChofer?: string;
+  estadoEntrega: EstadoDestinoRuta;
+  entregadoEn?: string;
+  observacionEntrega?: string;
+}
+
+export interface HojaRuta {
+  id: string;
+  codigoRuta: string;
+  fechaRuta: string; // YYYY-MM-DD
+  choferNombre: string;
+  choferTelefono?: string;
+  vehiculoPlaca: string;
+  zonaSector: string;
+  estado: EstadoHojaRuta;
+  totalDestinos: number;
+  totalPaquetes: number;
+  montoTotalCobrar?: number;
+  destinos?: DestinoRuta[];
+  creadoPor: string;
+  creadoEn: string;
+  actualizadoEn: string;
+}
 

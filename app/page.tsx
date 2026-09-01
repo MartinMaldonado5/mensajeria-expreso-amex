@@ -21,6 +21,7 @@ import CobrosTab from '@/components/tabs/CobrosTab';
 import DeliveriesTab from '@/components/tabs/DeliveriesTab';
 import PickingTab from '@/components/tabs/PickingTab';
 import ScannerTab from '@/components/tabs/ScannerTab';
+import LiveSheetsTab from '@/components/tabs/LiveSheetsTab';
 import NewClientModal, { NewClientFormData } from '@/components/modals/NewClientModal';
 import NewPackageModal, { NewPkgFormData } from '@/components/modals/NewPackageModal';
 import ThermalLabelModal from '@/components/modals/ThermalLabelModal';
@@ -534,6 +535,15 @@ export default function DashboardPage() {
                 />
               )}
 
+              {activeTab === 'live-sheets' && (
+                <LiveSheetsTab
+                  paquetes={paquetes}
+                  clientes={clientes}
+                  onViewPdf={setSelectedPdfUrl}
+                  currentUser={currentUser}
+                />
+              )}
+
               {(activeTab === 'mm-lince' || activeTab === 'mm-inventory') && (
                 <InventoryTab
                   paquetes={paquetes}
@@ -609,6 +619,15 @@ export default function DashboardPage() {
 
         <button
           type="button"
+          onClick={() => setActiveTab('live-sheets')}
+          className={`mobile-nav-btn ${activeTab === 'live-sheets' ? 'active' : ''}`}
+        >
+          <i className="fa-solid fa-table-list"></i>
+          <span>Cotejo</span>
+        </button>
+
+        <button
+          type="button"
           onClick={() => setActiveTab('mm-lince')}
           className={`mobile-nav-btn ${activeTab === 'mm-lince' || activeTab === 'mm-inventory' ? 'active' : ''}`}
         >
@@ -622,25 +641,25 @@ export default function DashboardPage() {
           className={`mobile-nav-btn ${activeTab === 'shp-entregas' ? 'active' : ''}`}
         >
           <i className="fa-solid fa-box-open"></i>
-          <span>Entregas WR</span>
+          <span>Entregas</span>
         </button>
 
         <button
           type="button"
-          onClick={() => setActiveTab('wms-picking')}
-          className={`mobile-nav-btn ${activeTab === 'wms-picking' ? 'active' : ''}`}
+          onClick={() => setActiveTab('shp-deliveries')}
+          className={`mobile-nav-btn ${activeTab === 'shp-deliveries' ? 'active' : ''}`}
         >
-          <i className="fa-solid fa-clipboard-list"></i>
-          <span>Picking</span>
+          <i className="fa-solid fa-truck"></i>
+          <span>Chofer</span>
         </button>
 
         <button
           type="button"
-          onClick={() => setActiveTab('mobile-scanner')}
-          className={`mobile-nav-btn ${activeTab === 'mobile-scanner' ? 'active' : ''}`}
+          onClick={() => setActiveTab('fico-cobros')}
+          className={`mobile-nav-btn ${activeTab === 'fico-cobros' ? 'active' : ''}`}
         >
-          <i className="fa-solid fa-barcode"></i>
-          <span>Escáner</span>
+          <i className="fa-solid fa-receipt"></i>
+          <span>Cobros</span>
         </button>
 
         <button

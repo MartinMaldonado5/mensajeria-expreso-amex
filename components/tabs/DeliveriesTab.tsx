@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Truck,
   MapPin,
@@ -25,1280 +25,1082 @@ import {
   Layers,
   X,
   FileText,
-  RefreshCw
+  RefreshCw,
+  Plus,
+  Calendar,
+  ChevronDown,
+  ChevronRight,
+  Edit2,
+  Trash2,
+  DollarSign
 } from 'lucide-react';
-import { Paquete, Cliente, TipoEstadoEntrega } from '@/types';
+import { Paquete, Cliente, HojaRuta, DestinoRuta, EstadoDestinoRuta } from '@/types';
 import { supabase } from '@/lib/supabase/client';
-import { exportHojaDeRutaToExcel } from '@/lib/excelExport';
-import { matchesFuzzySearch } from '@/lib/fuzzySearch';
-import ThermalLabelModal from '@/components/modals/ThermalLabelModal';
+import { soundEffects } from '@/lib/audio/soundEffects';
+import { generateDriverWhatsAppUrl, generateMapsUrl } from '@/lib/whatsappGenerator';
+import NewRouteModal from '@/components/modals/NewRouteModal';
 
 interface DeliveriesTabProps {
-  paquetes: Paquete[];
-  clientes: Cliente[];
+  paquetes?: Paquete[];
+  clientes?: Cliente[];
   onUpdatePackage?: (pkg: Paquete) => void;
-  onViewPdf: (url: string) => void;
+  onViewPdf?: (url: string) => void;
   onRefreshData?: () => Promise<void> | void;
+  currentUser?: { nombre: string; rol: string } | null;
 }
 
 export default function DeliveriesTab({
-  paquetes,
-  clientes,
+  paquetes = [],
+  clientes = [],
   onUpdatePackage,
   onViewPdf,
-  onRefreshData
+  onRefreshData,
+  currentUser
 }: DeliveriesTabProps) {
-  // Pestañas operativas: 'rutas' | 'mostrador' | 'historial'
-  const [activeSubTab, setActiveSubTab] = useState<'rutas' | 'mostrador' | 'historial'>('rutas');
+  const operatorName = currentUser?.nombre || 'Administración AMEX';
+
+  // Sub-pestañas: 'rutas' | 'chofer' | 'historial' | 'mostrador'
+  const [activeSubTab, setActiveSubTab] = useState<'rutas' | 'chofer' | 'historial' | 'mostrador'>('rutas');
+
+  // Estado de Hojas de Ruta
+  const [hojasRuta, setHojasRuta] = useState<HojaRuta[]>([]);
+  const [selectedRouteId, setSelectedRouteId] = useState<string | null>(null);
+  const [isLoadingRoutes, setIsLoadingRoutes] = useState(false);
+
+  // Modales
+  const [isNewRouteModalOpen, setIsNewRouteModalOpen] = useState(false);
+  const [editingRoute, setEditingRoute] = useState<HojaRuta | null>(null);
 
   // Filtros
   const [searchTerm, setSearchTerm] = useState('');
   const [districtFilter, setDistrictFilter] = useState<string>('ALL');
-  const [statusFilter, setStatusFilter] = useState<string>('ALL');
 
-  // Selección múltiple para despacho masivo
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  // Acordeón de Historial (Año -> Mes -> Día)
+  const [expandedYears, setExpandedYears] = useState<Record<string, boolean>>({ '2026': true });
+  const [expandedMonths, setExpandedMonths] = useState<Record<string, boolean>>({});
 
-  // Datos de Hoja de Ruta
-  const [driverName, setDriverName] = useState('Carlos Mendoza');
-  const [vehiclePlate, setVehiclePlate] = useState('Toyota Hilux AMEX (ABC-123)');
-  const [routeZone, setRouteZone] = useState('Ruta Lima Metropolitana (Centro - Sur)');
-
-  // Modales
-  const [selectedThermalPkg, setSelectedThermalPkg] = useState<Paquete | null>(null);
-  const [isRouteManifestOpen, setIsRouteManifestOpen] = useState(false);
-  const [confirmDeliveryPkg, setConfirmDeliveryPkg] = useState<(Paquete & { cliente?: Cliente }) | null>(null);
-  const [deliveryNotes, setDeliveryNotes] = useState<{
-    recibidoPor: string;
-    dniReceptor: string;
-    observaciones: string;
-  }>({
-    recibidoPor: '',
-    dniReceptor: '',
-    observaciones: 'Entregado conforme en dirección de destino'
-  });
-
-  // Mapa de Clientes por Código Casillero para enriquecer direcciones y teléfonos
-  const clientMap = useMemo(() => {
-    const map: Record<string, Cliente> = {};
-    for (const c of clientes) {
-      map[c.codigoCasillero] = c;
-    }
-    return map;
-  }, [clientes]);
-
-  // Lista de paquetes enriquecida con datos de cliente
-  const enrichedPackages = useMemo(() => {
-    return paquetes.map(p => {
-      const cli = clientMap[p.codigoCasillero];
-      return {
-        ...p,
-        cliente: cli
-      };
-    });
-  }, [paquetes, clientMap]);
-
-  // Paquetes clasificados por tipo de despacho
-  const deliveryPackages = useMemo(() => {
-    if (activeSubTab === 'rutas') {
-      return enrichedPackages.filter(p =>
-        p.metodoEntrega === 'CarroAmexDomicilio' &&
-        (p.estadoEntrega === 'EnAlmacen' || p.estadoEntrega === 'EnRutaCarroAmex')
-      );
-    }
-    if (activeSubTab === 'mostrador') {
-      return enrichedPackages.filter(p =>
-        (p.metodoEntrega === 'RecojoLince' || p.estadoEntrega === 'ListoParaRecojo') &&
-        p.estadoEntrega !== 'Entregado'
-      );
-    }
-    // 'historial'
-    return enrichedPackages.filter(p => p.estadoEntrega === 'Entregado');
-  }, [enrichedPackages, activeSubTab]);
-
-  // Distritos únicos para el selector
-  const availableDistricts = useMemo(() => {
-    const set = new Set<string>();
-    for (const p of deliveryPackages) {
-      if (p.cliente?.distrito) {
-        set.add(p.cliente.distrito.trim());
-      }
-    }
-    return Array.from(set).sort();
-  }, [deliveryPackages]);
-
-  // Filtrado final con Motor Fuzzy Inteligente
-  const filteredList = useMemo(() => {
-    return deliveryPackages.filter(p => {
-      const matchesSearch = matchesFuzzySearch(searchTerm, [
-        p.numeroReciboBodega,
-        p.codigoCasillero,
-        p.nombreConsignatario,
-        p.dniConsignatario,
-        p.cliente?.nombre,
-        p.cliente?.telefono,
-        p.cliente?.direccionEntrega,
-        p.cliente?.distrito,
-        p.trackingUsa,
-        p.posicionEstante
-      ]);
-
-      const matchesDistrict = districtFilter === 'ALL' ||
-        (p.cliente?.distrito && p.cliente.distrito.trim() === districtFilter);
-
-      const matchesStatus = statusFilter === 'ALL' || p.estadoEntrega === statusFilter;
-
-      return matchesSearch && matchesDistrict && matchesStatus;
-    });
-  }, [deliveryPackages, searchTerm, districtFilter, statusFilter]);
-
-  // Métricas globales
-  const countInWarehouse = useMemo(() =>
-    paquetes.filter(p => p.metodoEntrega === 'CarroAmexDomicilio' && p.estadoEntrega === 'EnAlmacen').length,
-    [paquetes]
-  );
-  const countInRoute = useMemo(() =>
-    paquetes.filter(p => p.estadoEntrega === 'EnRutaCarroAmex').length,
-    [paquetes]
-  );
-  const countCounterPickup = useMemo(() =>
-    paquetes.filter(p => p.metodoEntrega === 'RecojoLince' || p.estadoEntrega === 'ListoParaRecojo').length,
-    [paquetes]
-  );
-  const countDelivered = useMemo(() =>
-    paquetes.filter(p => p.estadoEntrega === 'Entregado').length,
-    [paquetes]
-  );
-
-  // -------------------------------------------------------------
-  // ACCIONES OPERATIVAS EN SUPABASE & KARDEX
-  // -------------------------------------------------------------
-
-  // 1. Cargar paquete a la camioneta de reparto
-  const handleLoadToCar = async (pkg: Paquete) => {
+  // Cargar Hojas de Ruta desde Supabase / LocalStorage
+  const fetchHojasRuta = useCallback(async () => {
     try {
-      await supabase
-        .from('paquetes')
-        .update({ estado_entrega: 'EnRutaCarroAmex' })
-        .eq('id', pkg.id);
+      setIsLoadingRoutes(true);
+      const { data, error } = await supabase
+        .from('hojas_ruta')
+        .select('*')
+        .order('fecha_ruta', { ascending: false });
 
-      const updated: Paquete = { ...pkg, estadoEntrega: 'EnRutaCarroAmex' };
-      if (onUpdatePackage) onUpdatePackage(updated);
-
-      await supabase.from('movimientos_kardex').insert({
-        paquete_id: pkg.id,
-        codigo_paquete: pkg.numeroReciboBodega,
-        consignatario: pkg.nombreConsignatario || pkg.codigoCasillero,
-        origen_descripcion: `Almacén Lince (${pkg.posicionEstante || 'REC'})`,
-        destino_descripcion: `En Camioneta AMEX (${driverName} - ${vehiclePlate})`,
-        tipo_movimiento: 'SALIDA_REPARTO',
-        motivo: `Cargado a hoja de ruta ${routeZone}`,
-        usuario_operador: 'Operador Logístico AMEX'
-      });
+      if (!error && data && data.length > 0) {
+        const mapped: HojaRuta[] = data.map(r => ({
+          id: r.id,
+          codigoRuta: r.codigo_ruta,
+          fechaRuta: r.fecha_ruta,
+          choferNombre: r.chofer_nombre || 'Carlos Mendoza',
+          choferTelefono: r.chofer_telefono || '987654321',
+          vehiculoPlaca: r.vehiculo_placa || 'Toyota Hilux AMEX',
+          zonaSector: r.zona_sector || 'Lima Metropolitana',
+          estado: r.estado || 'PLANIFICADA',
+          totalDestinos: Number(r.total_destinos || 0),
+          totalPaquetes: Number(r.total_paquetes || 0),
+          montoTotalCobrar: Number(r.monto_total_cobrar || 0),
+          destinos: (r.destinos_data as DestinoRuta[]) || [],
+          creadoPor: r.creado_por || 'AMEX',
+          creadoEn: r.creado_en,
+          actualizadoEn: r.actualizado_en
+        }));
+        setHojasRuta(mapped);
+        if (!selectedRouteId && mapped.length > 0) {
+          setSelectedRouteId(mapped[0].id);
+        }
+      } else {
+        // Rutas de muestra iniciales si no existen
+        const todayStr = new Date().toISOString().split('T')[0];
+        const sampleRoute: HojaRuta = {
+          id: 'route-sample-01',
+          codigoRuta: `RUTA-${todayStr.replace(/-/g, '')}-01`,
+          fechaRuta: todayStr,
+          choferNombre: 'Carlos Mendoza (Chofer Principal)',
+          choferTelefono: '987654321',
+          vehiculoPlaca: 'Toyota Hilux AMEX (ABC-123)',
+          zonaSector: 'Lima Metropolitana (Centro - Sur)',
+          estado: 'EN_RUTA',
+          totalDestinos: 3,
+          totalPaquetes: 5,
+          montoTotalCobrar: 45.0,
+          creadoPor: operatorName,
+          creadoEn: new Date().toISOString(),
+          actualizadoEn: new Date().toISOString(),
+          destinos: [
+            {
+              id: 'dest-01',
+              hojaRutaId: 'route-sample-01',
+              orden: 1,
+              clienteNombre: 'María Torres Pérez',
+              clienteCasillero: 'AMEX-PER-1045',
+              telefono: '987654321',
+              direccion: 'Av. Benavides 1450, Dpto 402',
+              distrito: 'MIRAFLORES',
+              referencia: 'Frente al parque Reducto',
+              codigosWrs: ['WR000451', 'WR000452'],
+              cantidadPaquetes: 2,
+              pesoTotalKg: 3.5,
+              montoCobrar: 25.0,
+              monedaCobro: 'PEN',
+              notasChofer: 'Tocar intercomunicador 402, conserje autorizado',
+              estadoEntrega: 'PENDIENTE'
+            },
+            {
+              id: 'dest-02',
+              hojaRutaId: 'route-sample-01',
+              orden: 2,
+              clienteNombre: 'Juan Carlos Rodríguez',
+              clienteCasillero: 'AMEX-PER-2030',
+              telefono: '998877665',
+              direccion: 'Calle Los Libertadores 320, Of. 601',
+              distrito: 'SAN ISIDRO',
+              referencia: 'Edificio empresarial Platinum',
+              codigosWrs: ['WR000453'],
+              cantidadPaquetes: 1,
+              pesoTotalKg: 1.2,
+              montoCobrar: 0,
+              monedaCobro: 'PEN',
+              notasChofer: 'Entregar en recepción piso 6',
+              estadoEntrega: 'PENDIENTE'
+            },
+            {
+              id: 'dest-03',
+              hojaRutaId: 'route-sample-01',
+              orden: 3,
+              clienteNombre: 'Luciana Valdivia',
+              clienteCasillero: 'AMEX-PER-3011',
+              telefono: '912345678',
+              direccion: 'Av. Primavera 650, Urb. Chacarilla',
+              distrito: 'SURCO',
+              referencia: 'Puerta blanca portón negro',
+              codigosWrs: ['WR000454', 'WR000455'],
+              cantidadPaquetes: 2,
+              pesoTotalKg: 4.8,
+              montoCobrar: 20.0,
+              monedaCobro: 'PEN',
+              notasChofer: 'Llamar al llegar para que baje a recibir',
+              estadoEntrega: 'PENDIENTE'
+            }
+          ]
+        };
+        setHojasRuta([sampleRoute]);
+        setSelectedRouteId(sampleRoute.id);
+      }
     } catch (err) {
-      console.error('Error cargando al carro:', err);
+      console.error('Error fetching hojas_ruta:', err);
+    } finally {
+      setIsLoadingRoutes(false);
+    }
+  }, [selectedRouteId, operatorName]);
+
+  useEffect(() => {
+    fetchHojasRuta();
+  }, [fetchHojasRuta]);
+
+  // Guardar o actualizar Hoja de Ruta
+  const handleSaveHojaRuta = async (route: HojaRuta) => {
+    try {
+      setHojasRuta(prev => {
+        const idx = prev.findIndex(r => r.id === route.id);
+        if (idx !== -1) {
+          const updated = [...prev];
+          updated[idx] = route;
+          return updated;
+        }
+        return [route, ...prev];
+      });
+      setSelectedRouteId(route.id);
+
+      // Persistir en Supabase
+      await supabase.from('hojas_ruta').upsert({
+        id: route.id,
+        codigo_ruta: route.codigoRuta,
+        fecha_ruta: route.fechaRuta,
+        chofer_nombre: route.choferNombre,
+        chofer_telefono: route.choferTelefono,
+        vehiculo_placa: route.vehiculoPlaca,
+        zona_sector: route.zonaSector,
+        estado: route.estado,
+        total_destinos: route.totalDestinos,
+        total_paquetes: route.totalPaquetes,
+        monto_total_cobrar: route.montoTotalCobrar,
+        destinos_data: route.destinos,
+        creado_por: route.creadoPor,
+        actualizado_en: new Date().toISOString()
+      });
+
+      soundEffects.playSuccess();
+    } catch (err) {
+      console.error('Error saving route to DB:', err);
     }
   };
 
-  // 2. Cargar selección masiva a la camioneta
-  const handleBatchLoadToCar = async () => {
-    if (selectedIds.length === 0) return;
-    try {
-      await supabase
-        .from('paquetes')
-        .update({ estado_entrega: 'EnRutaCarroAmex' })
-        .in('id', selectedIds);
+  // Actualizar estado de una parada específica (Chofer)
+  const handleUpdateDestinoStatus = async (
+    routeId: string,
+    destinoId: string,
+    nextStatus: EstadoDestinoRuta
+  ) => {
+    const route = hojasRuta.find(r => r.id === routeId);
+    if (!route || !route.destinos) return;
 
-      for (const id of selectedIds) {
-        const pkg = paquetes.find(p => p.id === id);
-        if (pkg) {
-          const updated: Paquete = { ...pkg, estadoEntrega: 'EnRutaCarroAmex' };
-          if (onUpdatePackage) onUpdatePackage(updated);
+    const nowIso = new Date().toISOString();
+    const updatedDestinos = route.destinos.map(d =>
+      d.id === destinoId
+        ? {
+            ...d,
+            estadoEntrega: nextStatus,
+            entregadoEn: nextStatus === 'ENTREGADO' ? nowIso : undefined
+          }
+        : d
+    );
 
-          await supabase.from('movimientos_kardex').insert({
-            paquete_id: pkg.id,
-            codigo_paquete: pkg.numeroReciboBodega,
-            consignatario: pkg.nombreConsignatario || pkg.codigoCasillero,
-            origen_descripcion: `Almacén Lince (${pkg.posicionEstante || 'REC'})`,
-            destino_descripcion: `En Camioneta AMEX (${driverName})`,
-            tipo_movimiento: 'SALIDA_REPARTO',
-            motivo: `Carga en lote a ruta ${routeZone}`,
-            usuario_operador: 'Operador Logístico AMEX'
-          });
+    const allDelivered = updatedDestinos.every(d => d.estadoEntrega === 'ENTREGADO');
+    const newRouteStatus = allDelivered ? 'COMPLETADA' : 'EN_RUTA';
+
+    const updatedRoute: HojaRuta = {
+      ...route,
+      estado: newRouteStatus,
+      destinos: updatedDestinos
+    };
+
+    setHojasRuta(prev => prev.map(r => (r.id === routeId ? updatedRoute : r)));
+
+    if (nextStatus === 'ENTREGADO') {
+      soundEffects.playSuccess();
+    }
+
+    // Actualizar paquetes en inventario si se entregaron
+    const dest = route.destinos.find(d => d.id === destinoId);
+    if (dest && nextStatus === 'ENTREGADO' && dest.codigosWrs.length > 0) {
+      for (const wr of dest.codigosWrs) {
+        await supabase
+          .from('paquetes')
+          .update({
+            estado_entrega: 'Entregado',
+            ubicacion_actual: 'Entregado'
+          })
+          .eq('numero_recibo_bodega', wr);
+
+        if (onUpdatePackage) {
+          const match = paquetes.find(p => p.numeroReciboBodega === wr);
+          if (match) {
+            onUpdatePackage({
+              ...match,
+              estadoEntrega: 'Entregado',
+              ubicacionActual: 'Entregado'
+            });
+          }
         }
       }
-      setSelectedIds([]);
-      alert(`✓ ¡Éxito! ${selectedIds.length} paquetes cargados a la camioneta de reparto.`);
-    } catch (err) {
-      console.error('Error en carga masiva:', err);
     }
-  };
 
-  // 3. Abrir modal para confirmar entrega individual
-  const openConfirmDeliveryModal = (pkg: Paquete & { cliente?: Cliente }) => {
-    setConfirmDeliveryPkg(pkg);
-    setDeliveryNotes({
-      recibidoPor: pkg.nombreConsignatario || pkg.cliente?.nombre || '',
-      dniReceptor: pkg.dniConsignatario || pkg.cliente?.documentoIdentidad || '',
-      observaciones: 'Entregado conforme en dirección del cliente'
+    // Guardar en Supabase
+    await supabase.from('hojas_ruta').upsert({
+      id: updatedRoute.id,
+      codigo_ruta: updatedRoute.codigoRuta,
+      fecha_ruta: updatedRoute.fechaRuta,
+      chofer_nombre: updatedRoute.choferNombre,
+      chofer_telefono: updatedRoute.choferTelefono,
+      vehiculo_placa: updatedRoute.vehiculoPlaca,
+      zona_sector: updatedRoute.zonaSector,
+      estado: updatedRoute.estado,
+      total_destinos: updatedRoute.totalDestinos,
+      total_paquetes: updatedRoute.totalPaquetes,
+      monto_total_cobrar: updatedRoute.montoTotalCobrar,
+      destinos_data: updatedRoute.destinos,
+      actualizado_en: nowIso
     });
   };
 
-  // 4. Ejecutar confirmación de entrega
-  const handleExecuteConfirmDelivery = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!confirmDeliveryPkg) return;
+  // Ruta seleccionada actualmente
+  const activeRoute = hojasRuta.find(r => r.id === selectedRouteId) || hojasRuta[0];
 
-    try {
-      await supabase
-        .from('paquetes')
-        .update({
-          estado_entrega: 'Entregado',
-          ubicacion_actual: 'Entregado'
-        })
-        .eq('id', confirmDeliveryPkg.id);
+  // Agrupación jerárquica para el Historial (Año -> Mes -> Día)
+  const historyTree = useMemo(() => {
+    const tree: Record<string, Record<string, Record<string, HojaRuta[]>>> = {};
 
-      const updated: Paquete = {
-        ...confirmDeliveryPkg,
-        estadoEntrega: 'Entregado',
-        ubicacionActual: 'Entregado'
+    hojasRuta.forEach(route => {
+      const dateParts = route.fechaRuta.split('-'); // [YYYY, MM, DD]
+      const year = dateParts[0] || '2026';
+      const monthNum = dateParts[1] || '01';
+      const day = dateParts[2] || '01';
+
+      const MONTH_NAMES: Record<string, string> = {
+        '01': 'Enero', '02': 'Febrero', '03': 'Marzo', '04': 'Abril',
+        '05': 'Mayo', '06': 'Junio', '07': 'Julio', '08': 'Agosto',
+        '09': 'Septiembre', '10': 'Octubre', '11': 'Noviembre', '12': 'Diciembre'
       };
-      if (onUpdatePackage) onUpdatePackage(updated);
+      const monthName = MONTH_NAMES[monthNum] || `Mes ${monthNum}`;
 
-      await supabase.from('historial_trazabilidad').insert({
-        paquete_id: confirmDeliveryPkg.id,
-        ubicacion: 'Domicilio del Cliente / Entregado',
-        descripcion_evento: `Entregado a ${deliveryNotes.recibidoPor} (DNI: ${deliveryNotes.dniReceptor || 'N/A'}). ${deliveryNotes.observaciones}`,
-        usuario_operador: driverName || 'Operador Logístico AMEX'
-      });
+      if (!tree[year]) tree[year] = {};
+      if (!tree[year][monthName]) tree[year][monthName] = {};
+      if (!tree[year][monthName][day]) tree[year][monthName][day] = [];
 
-      await supabase.from('movimientos_kardex').insert({
-        paquete_id: confirmDeliveryPkg.id,
-        codigo_paquete: confirmDeliveryPkg.numeroReciboBodega,
-        consignatario: confirmDeliveryPkg.nombreConsignatario || confirmDeliveryPkg.codigoCasillero,
-        origen_descripcion: 'Camioneta AMEX Reparto',
-        destino_descripcion: `Entregado a ${deliveryNotes.recibidoPor} (${deliveryNotes.dniReceptor || 'Titular'})`,
-        tipo_movimiento: 'ENTREGA',
-        motivo: deliveryNotes.observaciones,
-        usuario_operador: driverName || 'Operador Logístico AMEX'
-      });
+      tree[year][monthName][day].push(route);
+    });
 
-      setConfirmDeliveryPkg(null);
-      alert(`✓ ¡Paquete ${confirmDeliveryPkg.numeroReciboBodega} marcado como ENTREGADO con éxito!`);
-    } catch (err) {
-      console.error('Error confirmando entrega:', err);
-    }
+    return tree;
+  }, [hojasRuta]);
+
+  const toggleYear = (year: string) => {
+    setExpandedYears(prev => ({ ...prev, [year]: !prev[year] }));
   };
 
-  // 5. Reprogramar entrega (regresar a almacén custodia)
-  const handleReprogramDelivery = async (pkg: Paquete) => {
-    const motivo = prompt('Ingresa el motivo de no entrega / reprogramación:', 'Cliente ausente en domicilio');
-    if (!motivo) return;
-
-    try {
-      await supabase
-        .from('paquetes')
-        .update({ estado_entrega: 'EnAlmacen' })
-        .eq('id', pkg.id);
-
-      const updated: Paquete = { ...pkg, estadoEntrega: 'EnAlmacen' };
-      if (onUpdatePackage) onUpdatePackage(updated);
-
-      await supabase.from('movimientos_kardex').insert({
-        paquete_id: pkg.id,
-        codigo_paquete: pkg.numeroReciboBodega,
-        consignatario: pkg.nombreConsignatario || pkg.codigoCasillero,
-        origen_descripcion: 'Camioneta AMEX Reparto',
-        destino_descripcion: 'Almacén Lince (Custodia / Reprogramado)',
-        tipo_movimiento: 'ESTADO_CAMBIO',
-        motivo: `Reprogramado: ${motivo}`,
-        usuario_operador: driverName || 'Operador Logístico AMEX'
-      });
-
-      alert(`✓ Paquete ${pkg.numeroReciboBodega} devuelto a almacén para reprogramación.`);
-    } catch (err) {
-      console.error('Error reprogramando entrega:', err);
-    }
-  };
-
-  // 6. Enviar WhatsApp al cliente
-  const handleOpenWhatsApp = (pkg: Paquete & { cliente?: Cliente }) => {
-    const phone = pkg.cliente?.telefono?.replace(/\D/g, '') || '';
-    if (!phone) {
-      alert('El cliente no tiene registrado un número telefónico.');
-      return;
-    }
-    const cleanPhone = phone.startsWith('51') ? phone : `51${phone}`;
-    const clientName = pkg.nombreConsignatario || pkg.cliente?.nombre || 'Cliente AMEX';
-    const address = pkg.cliente?.direccionEntrega || 'tu dirección';
-    const msg = `Hola *${clientName}*, te saluda *AMEX Courier*. Tu paquete con Guía *${pkg.numeroReciboBodega}* está en camino a tu dirección: *${address}* en la camioneta de reparto. Nuestro conductor llegará pronto. Por favor ten a la mano tu DNI. ¡Muchas gracias!`;
-    const url = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(msg)}`;
-    window.open(url, '_blank');
-  };
-
-  // 7. Abrir Google Maps con la dirección
-  const handleOpenMaps = (pkg: Paquete & { cliente?: Cliente }) => {
-    const addr = pkg.cliente?.direccionEntrega;
-    const dist = pkg.cliente?.distrito || 'Lima';
-    if (!addr) {
-      alert('Este paquete no cuenta con dirección de entrega registrada.');
-      return;
-    }
-    const query = `${addr}, ${dist}, Lima, Peru`;
-    window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`, '_blank');
-  };
-
-  // Toggle selección
-  const handleToggleSelect = (id: string) => {
-    setSelectedIds(prev =>
-      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
-    );
-  };
-
-  const handleSelectAll = () => {
-    if (selectedIds.length === filteredList.length) {
-      setSelectedIds([]);
-    } else {
-      setSelectedIds(filteredList.map(p => p.id));
-    }
+  const toggleMonth = (key: string) => {
+    setExpandedMonths(prev => ({ ...prev, [key]: !prev[key] }));
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-      {/* Breadcrumb & Header */}
-      <div className="sap-breadcrumb">
-        <span>Operaciones y Almacenes</span> / <span>Despacho & Reparto a Domicilio (Carro AMEX)</span>
-      </div>
-
-      <div
-        className="page-title-bar"
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          flexWrap: 'wrap',
-          gap: '12px'
-        }}
-      >
-        <div>
-          <h1 className="page-title" style={{ display: 'flex', alignItems: 'center', gap: '10px', margin: 0 }}>
-            <Truck style={{ width: '28px', height: '28px', color: '#2563eb' }} />
-            Despacho & Reparto Local (Carro AMEX)
-          </h1>
-          <p className="page-subtitle" style={{ margin: '4px 0 0 0' }}>
-            Control de hojas de ruta, carga de camioneta, trazabilidad de entregas a domicilio y mostrador
-          </p>
-        </div>
-
-        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-          <button
-            className="btn"
-            onClick={() => exportHojaDeRutaToExcel(filteredList, `${driverName} (${vehiclePlate})`, routeZone)}
-            style={{
-              background: '#f0fdf4',
-              border: '1px solid #bbf7d0',
-              color: '#166534',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              fontWeight: 800
-            }}
-          >
-            <FileSpreadsheet className="w-4 h-4 text-emerald-600" /> Exportar Hoja de Ruta (.xlsx)
-          </button>
-
-          <button
-            className="btn btn-primary"
-            onClick={() => setIsRouteManifestOpen(true)}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              fontWeight: 800
-            }}
-          >
-            <Printer className="w-4 h-4" /> Imprimir Hoja de Ruta
-          </button>
-        </div>
-      </div>
-
-      {/* KPI RIBBON DE DESPACHO */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px' }}>
-        <div
-          onClick={() => { setActiveSubTab('rutas'); setStatusFilter('EnAlmacen'); }}
-          style={{
-            background: activeSubTab === 'rutas' && statusFilter === 'EnAlmacen' ? '#eff6ff' : '#ffffff',
-            border: activeSubTab === 'rutas' && statusFilter === 'EnAlmacen' ? '2px solid #2563eb' : '1px solid #e2e8f0',
-            borderRadius: '12px',
-            padding: '14px',
-            cursor: 'pointer',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-            transition: 'all 0.15s ease'
-          }}
-        >
-          <div style={{ fontSize: '11px', fontWeight: 800, color: '#1e40af', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <Package className="w-4 h-4 text-blue-600" /> Por Cargar / En Almacén
-          </div>
-          <div style={{ fontSize: '24px', fontWeight: 900, color: '#1e3a8a', marginTop: '4px' }}>
-            {countInWarehouse} <span style={{ fontSize: '12px', fontWeight: 700 }}>paquetes</span>
-          </div>
-        </div>
-
-        <div
-          onClick={() => { setActiveSubTab('rutas'); setStatusFilter('EnRutaCarroAmex'); }}
-          style={{
-            background: activeSubTab === 'rutas' && statusFilter === 'EnRutaCarroAmex' ? '#fef3c7' : '#ffffff',
-            border: activeSubTab === 'rutas' && statusFilter === 'EnRutaCarroAmex' ? '2px solid #f59e0b' : '1px solid #e2e8f0',
-            borderRadius: '12px',
-            padding: '14px',
-            cursor: 'pointer',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-            transition: 'all 0.15s ease'
-          }}
-        >
-          <div style={{ fontSize: '11px', fontWeight: 800, color: '#b45309', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <Truck className="w-4 h-4 text-amber-600" /> En Ruta (Carro AMEX)
-          </div>
-          <div style={{ fontSize: '24px', fontWeight: 900, color: '#92400e', marginTop: '4px' }}>
-            {countInRoute} <span style={{ fontSize: '12px', fontWeight: 700 }}>paquetes</span>
-          </div>
-        </div>
-
-        <div
-          onClick={() => { setActiveSubTab('mostrador'); setStatusFilter('ALL'); }}
-          style={{
-            background: activeSubTab === 'mostrador' ? '#f3e8ff' : '#ffffff',
-            border: activeSubTab === 'mostrador' ? '2px solid #9333ea' : '1px solid #e2e8f0',
-            borderRadius: '12px',
-            padding: '14px',
-            cursor: 'pointer',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-            transition: 'all 0.15s ease'
-          }}
-        >
-          <div style={{ fontSize: '11px', fontWeight: 800, color: '#7e22ce', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <Store className="w-4 h-4 text-purple-600" /> Recojo en Tienda (Lince)
-          </div>
-          <div style={{ fontSize: '24px', fontWeight: 900, color: '#581c87', marginTop: '4px' }}>
-            {countCounterPickup} <span style={{ fontSize: '12px', fontWeight: 700 }}>listos</span>
-          </div>
-        </div>
-
-        <div
-          onClick={() => { setActiveSubTab('historial'); setStatusFilter('ALL'); }}
-          style={{
-            background: activeSubTab === 'historial' ? '#f0fdf4' : '#ffffff',
-            border: activeSubTab === 'historial' ? '2px solid #16a34a' : '1px solid #e2e8f0',
-            borderRadius: '12px',
-            padding: '14px',
-            cursor: 'pointer',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-            transition: 'all 0.15s ease'
-          }}
-        >
-          <div style={{ fontSize: '11px', fontWeight: 800, color: '#15803d', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <CheckCircle2 className="w-4 h-4 text-emerald-600" /> Entregados
-          </div>
-          <div style={{ fontSize: '24px', fontWeight: 900, color: '#166534', marginTop: '4px' }}>
-            {countDelivered} <span style={{ fontSize: '12px', fontWeight: 700 }}>completados</span>
-          </div>
-        </div>
-      </div>
-
-      {/* PESTAÑAS DE NAVEGACIÓN SECUNDARIA */}
-      <div style={{ display: 'flex', gap: '6px', borderBottom: '2px solid #e2e8f0', paddingBottom: '2px' }}>
-        <button
-          onClick={() => { setActiveSubTab('rutas'); setStatusFilter('ALL'); }}
-          style={{
-            padding: '8px 16px',
-            fontSize: '13px',
-            fontWeight: 800,
-            background: 'none',
-            border: 'none',
-            borderBottom: activeSubTab === 'rutas' ? '3px solid #2563eb' : '3px solid transparent',
-            color: activeSubTab === 'rutas' ? '#2563eb' : '#64748b',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px'
-          }}
-        >
-          <Truck className="w-4 h-4" /> Rutas & Despacho Domicilio
-        </button>
-
-        <button
-          onClick={() => { setActiveSubTab('mostrador'); setStatusFilter('ALL'); }}
-          style={{
-            padding: '8px 16px',
-            fontSize: '13px',
-            fontWeight: 800,
-            background: 'none',
-            border: 'none',
-            borderBottom: activeSubTab === 'mostrador' ? '3px solid #9333ea' : '3px solid transparent',
-            color: activeSubTab === 'mostrador' ? '#9333ea' : '#64748b',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px'
-          }}
-        >
-          <Store className="w-4 h-4" /> Recojo en Tienda Lince
-        </button>
-
-        <button
-          onClick={() => { setActiveSubTab('historial'); setStatusFilter('ALL'); }}
-          style={{
-            padding: '8px 16px',
-            fontSize: '13px',
-            fontWeight: 800,
-            background: 'none',
-            border: 'none',
-            borderBottom: activeSubTab === 'historial' ? '3px solid #16a34a' : '3px solid transparent',
-            color: activeSubTab === 'historial' ? '#16a34a' : '#64748b',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px'
-          }}
-        >
-          <CheckCircle2 className="w-4 h-4" /> Historial de Entregados
-        </button>
-      </div>
-
-      {/* PANEL DE ASIGNACIÓN DE CHOFER Y RUTA */}
-      {activeSubTab === 'rutas' && (
-        <div
-          style={{
-            background: '#ffffff',
-            border: '1px solid #e2e8f0',
-            borderRadius: '12px',
-            padding: '14px 16px',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            gap: '16px',
-            flexWrap: 'wrap'
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap', flex: 1 }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <label style={{ fontSize: '11px', fontWeight: 800, color: '#475569', textTransform: 'uppercase' }}>
-                Chofer / Conductor Asignado
-              </label>
-              <input
-                type="text"
-                value={driverName}
-                onChange={e => setDriverName(e.target.value)}
-                placeholder="Nombre del Chofer"
-                style={{
-                  padding: '6px 10px',
-                  borderRadius: '6px',
-                  border: '1px solid #cbd5e1',
-                  fontSize: '12.5px',
-                  fontWeight: 700,
-                  width: '190px',
-                  background: '#f8fafc'
-                }}
-              />
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <label style={{ fontSize: '11px', fontWeight: 800, color: '#475569', textTransform: 'uppercase' }}>
-                Vehículo / Placa
-              </label>
-              <input
-                type="text"
-                value={vehiclePlate}
-                onChange={e => setVehiclePlate(e.target.value)}
-                placeholder="Vehículo y Placa"
-                style={{
-                  padding: '6px 10px',
-                  borderRadius: '6px',
-                  border: '1px solid #cbd5e1',
-                  fontSize: '12.5px',
-                  fontWeight: 700,
-                  width: '230px',
-                  background: '#f8fafc'
-                }}
-              />
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1, minWidth: '200px' }}>
-              <label style={{ fontSize: '11px', fontWeight: 800, color: '#475569', textTransform: 'uppercase' }}>
-                Zona / Ruta de Reparto
-              </label>
-              <input
-                type="text"
-                value={routeZone}
-                onChange={e => setRouteZone(e.target.value)}
-                placeholder="Zona / Distritos de la Ruta"
-                style={{
-                  padding: '6px 10px',
-                  borderRadius: '6px',
-                  border: '1px solid #cbd5e1',
-                  fontSize: '12.5px',
-                  fontWeight: 700,
-                  width: '100%',
-                  background: '#f8fafc'
-                }}
-              />
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* BARRA DE BÚSQUEDA Y FILTROS */}
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100%',
+        width: '100%',
+        overflow: 'hidden',
+        background: '#f8fafc'
+      }}
+    >
+      {/* ---------------- TOP BAR: HEADER & SUB-TABS ---------------- */}
       <div
         style={{
           background: '#ffffff',
-          border: '1px solid #e2e8f0',
-          borderRadius: '12px',
-          padding: '12px 16px',
+          borderBottom: '1px solid #e2e8f0',
+          padding: '10px 16px',
           display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
           flexWrap: 'wrap',
-          gap: '12px'
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '12px',
+          boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
+          flexShrink: 0
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, minWidth: '260px' }}>
-          <div style={{ position: 'relative', width: '100%', maxWidth: '380px' }}>
-            <Search
-              style={{
-                position: 'absolute',
-                left: '12px',
-                top: '50%',
-                transform: 'translateY(-50%)',
-                width: '16px',
-                height: '16px',
-                color: '#94a3b8'
-              }}
-            />
-            <input
-              type="text"
-              placeholder="Buscar por WR, Casillero, Consignatario, Teléfono o Dirección..."
-              value={searchTerm}
-              onChange={e => setSearchTerm(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '8px 12px 8px 36px',
-                borderRadius: '8px',
-                border: '1px solid #cbd5e1',
-                fontSize: '13px',
-                background: '#f8fafc'
-              }}
-            />
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div
+            style={{
+              width: '38px',
+              height: '38px',
+              borderRadius: '10px',
+              background: '#eff6ff',
+              border: '1px solid #bfdbfe',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#2563eb',
+              flexShrink: 0
+            }}
+          >
+            <Truck style={{ width: '20px', height: '20px' }} />
           </div>
-
-          {/* ACCIONES MASIVAS CUANDO HAY SELECCIÓN */}
-          {selectedIds.length > 0 && (
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                background: '#eff6ff',
-                padding: '4px 10px',
-                borderRadius: '8px',
-                border: '1px solid #bfdbfe'
-              }}
-            >
-              <span style={{ fontSize: '12px', fontWeight: 800, color: '#1e40af' }}>
-                {selectedIds.length} selec.
-              </span>
-              <button
-                onClick={handleBatchLoadToCar}
-                className="btn btn-primary"
-                style={{ padding: '4px 10px', fontSize: '11.5px', height: '28px', display: 'flex', alignItems: 'center', gap: '4px' }}
-              >
-                <Truck className="w-3.5 h-3.5" /> Cargar a Camioneta
-              </button>
-              <button
-                onClick={() => setSelectedIds([])}
-                style={{ background: 'none', border: 'none', color: '#64748b', fontSize: '11px', fontWeight: 700, cursor: 'pointer' }}
-              >
-                ✕
-              </button>
-            </div>
-          )}
+          <div>
+            <h1 style={{ fontSize: '15px', fontWeight: 900, color: '#0f172a', margin: 0 }}>
+              Despacho Carro AMEX & Hojas de Ruta
+            </h1>
+            <p style={{ fontSize: '11.5px', color: '#64748b', margin: '2px 0 0 0' }}>
+              Gestión de entregas a domicilio, enlaces de WhatsApp para chofer y control histórico
+            </p>
+          </div>
         </div>
 
-        {/* SELECTORES DE FILTRO */}
-        <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <label style={{ fontSize: '12px', fontWeight: 800, color: '#475569' }}>Distrito:</label>
-            <select
-              value={districtFilter}
-              onChange={e => setDistrictFilter(e.target.value)}
-              style={{ padding: '6px 8px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '12px', background: '#f8fafc', fontWeight: 700 }}
-            >
-              <option value="ALL">Todos los Distritos</option>
-              {availableDistricts.map(d => (
-                <option key={d} value={d}>{d}</option>
-              ))}
-            </select>
-          </div>
+        {/* Sub-Tabs Nav */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', background: '#f1f5f9', padding: '3px', borderRadius: '10px' }}>
+          <button
+            type="button"
+            onClick={() => setActiveSubTab('rutas')}
+            style={{
+              padding: '6px 12px',
+              borderRadius: '8px',
+              fontSize: '12px',
+              fontWeight: 800,
+              border: 'none',
+              cursor: 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              background: activeSubTab === 'rutas' ? '#ffffff' : 'transparent',
+              color: activeSubTab === 'rutas' ? '#1d4ed8' : '#64748b',
+              boxShadow: activeSubTab === 'rutas' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none'
+            }}
+          >
+            <Truck style={{ width: '14px', height: '14px' }} />
+            <span>1. Rutas de Reparto</span>
+          </button>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <label style={{ fontSize: '12px', fontWeight: 800, color: '#475569' }}>Estado:</label>
-            <select
-              value={statusFilter}
-              onChange={e => setStatusFilter(e.target.value)}
-              style={{ padding: '6px 8px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '12px', background: '#f8fafc', fontWeight: 700 }}
-            >
-              <option value="ALL">Todos los Estados</option>
-              <option value="EnAlmacen">En Almacén (Por Cargar)</option>
-              <option value="EnRutaCarroAmex">En Ruta (Carro AMEX)</option>
-              <option value="ListoParaRecojo">Listo para Recojo</option>
-              <option value="Entregado">Entregado</option>
-            </select>
-          </div>
+          <button
+            type="button"
+            onClick={() => setActiveSubTab('chofer')}
+            style={{
+              padding: '6px 12px',
+              borderRadius: '8px',
+              fontSize: '12px',
+              fontWeight: 800,
+              border: 'none',
+              cursor: 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              background: activeSubTab === 'chofer' ? '#10b981' : 'transparent',
+              color: activeSubTab === 'chofer' ? '#ffffff' : '#047857',
+              boxShadow: activeSubTab === 'chofer' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none'
+            }}
+          >
+            <MessageCircle style={{ width: '14px', height: '14px' }} />
+            <span>2. 📱 Vista Chofer (WhatsApp)</span>
+          </button>
 
-          {onRefreshData && (
-            <button
-              onClick={onRefreshData}
-              className="btn"
-              style={{
-                background: '#ffffff',
-                border: '1px solid #cbd5e1',
-                color: '#0f172a',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '6px',
-                fontWeight: 800,
-                fontSize: '12px',
-                height: '32px',
-                padding: '0 10px',
-                cursor: 'pointer'
-              }}
-              title="Sincronizar rutas y despachos"
-            >
-              <RefreshCw className="w-3.5 h-3.5 text-blue-600" /> Actualizar
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={() => setActiveSubTab('historial')}
+            style={{
+              padding: '6px 12px',
+              borderRadius: '8px',
+              fontSize: '12px',
+              fontWeight: 800,
+              border: 'none',
+              cursor: 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              background: activeSubTab === 'historial' ? '#ffffff' : 'transparent',
+              color: activeSubTab === 'historial' ? '#0f172a' : '#64748b',
+              boxShadow: activeSubTab === 'historial' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none'
+            }}
+          >
+            <Calendar style={{ width: '14px', height: '14px' }} />
+            <span>3. 📅 Historial Año/Mes/Día</span>
+          </button>
         </div>
+
+        {/* Action Button: Nueva Ruta */}
+        <button
+          type="button"
+          onClick={() => {
+            setEditingRoute(null);
+            setIsNewRouteModalOpen(true);
+          }}
+          style={{
+            padding: '7px 14px',
+            background: '#2563eb',
+            color: '#ffffff',
+            border: 'none',
+            borderRadius: '8px',
+            fontSize: '12px',
+            fontWeight: 900,
+            cursor: 'pointer',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '6px',
+            boxShadow: '0 2px 6px rgba(37,99,235,0.25)'
+          }}
+        >
+          <Plus style={{ width: '15px', height: '15px', strokeWidth: 3 }} />
+          <span>+ Generar Hoja de Ruta</span>
+        </button>
       </div>
 
-      {/* TABLA PRINCIPAL DE DESPACHO */}
-      <div className="card-panel" style={{ padding: 0, overflow: 'hidden' }}>
-        <div className="table-responsive">
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12.5px' }}>
-            <thead>
-              <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', color: '#475569', fontWeight: 800, textTransform: 'uppercase', fontSize: '11px', letterSpacing: '0.4px' }}>
-                <th style={{ padding: '12px 14px', width: '38px', textAlign: 'center' }}>
-                  <input
-                    type="checkbox"
-                    checked={filteredList.length > 0 && selectedIds.length === filteredList.length}
-                    onChange={handleSelectAll}
-                  />
-                </th>
-                <th style={{ padding: '12px 14px', textAlign: 'left' }}>Parada / WR</th>
-                <th style={{ padding: '12px 14px', textAlign: 'left' }}>Cliente / Casillero</th>
-                <th style={{ padding: '12px 14px', textAlign: 'left' }}>Dirección & Distrito</th>
-                <th style={{ padding: '12px 14px', textAlign: 'left' }}>Contacto Rápido</th>
-                <th style={{ padding: '12px 14px', textAlign: 'left' }}>Bulto</th>
-                <th style={{ padding: '12px 14px', textAlign: 'center' }}>Estado Despacho</th>
-                <th style={{ padding: '12px 14px', textAlign: 'center' }}>Acciones Operativas</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredList.length === 0 ? (
-                <tr>
-                  <td colSpan={8} style={{ textAlign: 'center', padding: '40px 16px', color: '#94a3b8' }}>
-                    <Truck style={{ width: '42px', height: '42px', margin: '0 auto 8px auto', color: '#cbd5e1' }} />
-                    <div style={{ fontWeight: 800, color: '#64748b', fontSize: '14px' }}>
-                      No hay paquetes en esta vista con los filtros seleccionados
-                    </div>
-                  </td>
-                </tr>
-              ) : (
-                filteredList.map((pkg, idx) => {
-                  const isSelected = selectedIds.includes(pkg.id);
-                  const isEnRuta = pkg.estadoEntrega === 'EnRutaCarroAmex';
-                  const isDelivered = pkg.estadoEntrega === 'Entregado';
-                  const phone = pkg.cliente?.telefono || '';
+      {/* ---------------- MAIN CONTENT AREA ---------------- */}
+      <div style={{ flex: 1, overflow: 'auto', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        {/* ==============================================================
+            SUB-TAB 1: PANEL ADMINISTRATIVO DE RUTAS
+            ============================================================== */}
+        {activeSubTab === 'rutas' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            {/* KPI Cards */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' }}>
+              <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '14px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', boxShadow: '0 1px 3px rgba(0,0,0,0.02)' }}>
+                <div>
+                  <div style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase' }}>Hojas de Ruta</div>
+                  <div style={{ fontSize: '20px', fontWeight: 900, color: '#0f172a', marginTop: '2px' }}>{hojasRuta.length}</div>
+                </div>
+                <div style={{ width: '36px', height: '36px', borderRadius: '8px', background: '#eff6ff', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#2563eb' }}>
+                  <FileText style={{ width: '18px', height: '18px' }} />
+                </div>
+              </div>
 
-                  return (
-                    <tr
-                      key={pkg.id}
+              <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '14px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', boxShadow: '0 1px 3px rgba(0,0,0,0.02)' }}>
+                <div>
+                  <div style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase' }}>Destinos / Paradas</div>
+                  <div style={{ fontSize: '20px', fontWeight: 900, color: '#0f172a', marginTop: '2px' }}>
+                    {hojasRuta.reduce((acc, r) => acc + (r.totalDestinos || 0), 0)}
+                  </div>
+                </div>
+                <div style={{ width: '36px', height: '36px', borderRadius: '8px', background: '#ecfdf5', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#059669' }}>
+                  <MapPin style={{ width: '18px', height: '18px' }} />
+                </div>
+              </div>
+
+              <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '14px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', boxShadow: '0 1px 3px rgba(0,0,0,0.02)' }}>
+                <div>
+                  <div style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase' }}>Bultos Asignados</div>
+                  <div style={{ fontSize: '20px', fontWeight: 900, color: '#0f172a', marginTop: '2px' }}>
+                    {hojasRuta.reduce((acc, r) => acc + (r.totalPaquetes || 0), 0)}
+                  </div>
+                </div>
+                <div style={{ width: '36px', height: '36px', borderRadius: '8px', background: '#faf5ff', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#7e22ce' }}>
+                  <Package style={{ width: '18px', height: '18px' }} />
+                </div>
+              </div>
+            </div>
+
+            {/* Lista de Hojas de Ruta */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div style={{ fontSize: '13px', fontWeight: 900, color: '#0f172a', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span>Hojas de Ruta Registradas</span>
+              </div>
+
+              {hojasRuta.length === 0 ? (
+                <div style={{ padding: '40px', textAlign: 'center', background: '#ffffff', borderRadius: '12px', border: '1px dashed #cbd5e1', color: '#94a3b8' }}>
+                  <Truck style={{ width: '36px', height: '36px', margin: '0 auto 8px', color: '#cbd5e1' }} />
+                  <p style={{ fontSize: '13px', fontWeight: 700, margin: 0 }}>No hay hojas de ruta creadas</p>
+                  <p style={{ fontSize: '11.5px', margin: '4px 0 0 0' }}>Haz clic en "+ Generar Hoja de Ruta" para armar los destinos del chofer.</p>
+                </div>
+              ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '12px' }}>
+                  {hojasRuta.map(r => (
+                    <div
+                      key={r.id}
                       style={{
-                        borderBottom: '1px solid #f1f5f9',
-                        background: isSelected ? '#eff6ff' : isEnRuta ? '#fffbeb' : '#ffffff',
-                        transition: 'background 0.15s ease'
+                        background: '#ffffff',
+                        border: selectedRouteId === r.id ? '2px solid #2563eb' : '1px solid #cbd5e1',
+                        borderRadius: '12px',
+                        padding: '14px 16px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        justifyContent: 'space-between',
+                        gap: '12px',
+                        boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
+                        transition: 'all 0.15s ease'
                       }}
                     >
-                      <td style={{ padding: '10px 14px', textAlign: 'center' }}>
-                        <input
-                          type="checkbox"
-                          checked={isSelected}
-                          onChange={() => handleToggleSelect(pkg.id)}
-                        />
-                      </td>
-
-                      {/* Parada & WR */}
-                      <td style={{ padding: '10px 14px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+                          <span style={{ fontFamily: 'monospace', fontWeight: 900, fontSize: '13px', color: '#1e40af' }}>
+                            {r.codigoRuta}
+                          </span>
                           <span
                             style={{
-                              width: '22px',
-                              height: '22px',
-                              borderRadius: '50%',
-                              background: '#2563eb',
-                              color: '#ffffff',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              fontSize: '11px',
-                              fontWeight: 900
+                              padding: '2px 8px',
+                              borderRadius: '9999px',
+                              fontSize: '10.5px',
+                              fontWeight: 900,
+                              background: r.estado === 'COMPLETADA' ? '#ecfdf5' : '#eff6ff',
+                              color: r.estado === 'COMPLETADA' ? '#047857' : '#1d4ed8',
+                              border: r.estado === 'COMPLETADA' ? '1px solid #a7f3d0' : '1px solid #bfdbfe'
                             }}
                           >
-                            {idx + 1}
+                            {r.estado}
                           </span>
-                          <div>
-                            <div style={{ fontWeight: 800, fontFamily: 'monospace', color: '#0f172a', fontSize: '13px' }}>
-                              {pkg.numeroReciboBodega}
-                            </div>
-                            <div style={{ fontSize: '11px', color: '#64748b', fontFamily: 'monospace' }}>
-                              {pkg.trackingUsa || 'S/N Tracking'}
-                            </div>
-                          </div>
                         </div>
-                      </td>
 
-                      {/* Cliente & Casillero */}
-                      <td style={{ padding: '10px 14px' }}>
-                        <div style={{ fontWeight: 800, color: '#2563eb', fontSize: '12px' }}>
-                          {pkg.codigoCasillero}
+                        <div style={{ fontSize: '12px', fontWeight: 700, color: '#334155' }}>
+                          📅 Fecha: <b>{r.fechaRuta}</b>
                         </div>
-                        <div style={{ fontWeight: 700, color: '#0f172a' }}>
-                          {pkg.nombreConsignatario || pkg.cliente?.nombre || 'Cliente AMEX'}
+                        <div style={{ fontSize: '12px', color: '#475569', marginTop: '2px' }}>
+                          👤 Chofer: <b>{r.choferNombre}</b> • 🚗 {r.vehiculoPlaca}
                         </div>
-                        <div style={{ fontSize: '11px', color: '#64748b' }}>
-                          DNI: {pkg.dniConsignatario || pkg.cliente?.documentoIdentidad || 'No registrado'}
+                        <div style={{ fontSize: '11.5px', color: '#64748b', marginTop: '2px' }}>
+                          📍 Zona: {r.zonaSector}
                         </div>
-                      </td>
 
-                      {/* Dirección & Distrito */}
-                      <td style={{ padding: '10px 14px', maxWidth: '240px' }}>
-                        <div style={{ fontWeight: 600, color: '#1e293b', fontSize: '12px', lineHeight: 1.3 }}>
-                          {pkg.cliente?.direccionEntrega || 'Dirección de contacto en casillero'}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '10px', padding: '8px 10px', background: '#f8fafc', borderRadius: '8px', fontSize: '11.5px' }}>
+                          <span style={{ fontWeight: 800, color: '#0f172a' }}>📍 {r.totalDestinos} destinos</span>
+                          <span>•</span>
+                          <span style={{ fontWeight: 800, color: '#2563eb' }}>📦 {r.totalPaquetes} paquetes</span>
                         </div>
-                        <span
-                          style={{
-                            fontSize: '10.5px',
-                            fontWeight: 800,
-                            padding: '2px 6px',
-                            borderRadius: '4px',
-                            background: '#f1f5f9',
-                            color: '#475569',
-                            display: 'inline-block',
-                            marginTop: '3px'
+                      </div>
+
+                      {/* Botones de acción */}
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: '10px', borderTop: '1px solid #f1f5f9' }}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedRouteId(r.id);
+                            setActiveSubTab('chofer');
                           }}
-                        >
-                          📍 {pkg.cliente?.distrito || 'Lima'}
-                        </span>
-                      </td>
-
-                      {/* Contacto Rápido */}
-                      <td style={{ padding: '10px 14px' }}>
-                        <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                          {phone && (
-                            <button
-                              onClick={() => handleOpenWhatsApp(pkg)}
-                              title="Enviar WhatsApp con aviso de llegada"
-                              style={{
-                                background: '#dcfce7',
-                                border: '1px solid #86efac',
-                                color: '#15803d',
-                                padding: '4px 8px',
-                                borderRadius: '6px',
-                                cursor: 'pointer',
-                                fontSize: '11px',
-                                fontWeight: 800,
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '4px'
-                              }}
-                            >
-                              <MessageCircle className="w-3.5 h-3.5" /> WhatsApp
-                            </button>
-                          )}
-
-                          {pkg.cliente?.direccionEntrega && (
-                            <button
-                              onClick={() => handleOpenMaps(pkg)}
-                              title="Abrir ubicación en Google Maps"
-                              style={{
-                                background: '#eff6ff',
-                                border: '1px solid #bfdbfe',
-                                color: '#1d4ed8',
-                                padding: '4px 8px',
-                                borderRadius: '6px',
-                                cursor: 'pointer',
-                                fontSize: '11px',
-                                fontWeight: 800,
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '4px'
-                              }}
-                            >
-                              <Navigation className="w-3.5 h-3.5" /> Mapa
-                            </button>
-                          )}
-                        </div>
-                      </td>
-
-                      {/* Bulto & Peso */}
-                      <td style={{ padding: '10px 14px' }}>
-                        <div style={{ fontWeight: 800, color: '#0f172a' }}>{pkg.pesoKg} Kg</div>
-                        <div style={{ fontSize: '10.5px', color: '#64748b' }}>{pkg.tipoEmpaque}</div>
-                      </td>
-
-                      {/* Estado Despacho */}
-                      <td style={{ padding: '10px 14px', textAlign: 'center' }}>
-                        <span
                           style={{
-                            fontSize: '11px',
-                            fontWeight: 800,
-                            padding: '3px 8px',
+                            padding: '6px 12px',
+                            background: '#10b981',
+                            color: '#ffffff',
+                            border: 'none',
                             borderRadius: '6px',
-                            background:
-                              pkg.estadoEntrega === 'Entregado'
-                                ? '#dcfce7'
-                                : isEnRuta
-                                ? '#fef3c7'
-                                : '#eff6ff',
-                            color:
-                              pkg.estadoEntrega === 'Entregado'
-                                ? '#166534'
-                                : isEnRuta
-                                ? '#92400e'
-                                : '#1e40af',
+                            fontSize: '11.5px',
+                            fontWeight: 800,
+                            cursor: 'pointer',
                             display: 'inline-flex',
                             alignItems: 'center',
                             gap: '4px'
                           }}
                         >
-                          {pkg.estadoEntrega === 'Entregado' && <CheckCircle2 className="w-3.5 h-3.5" />}
-                          {isEnRuta && <Truck className="w-3.5 h-3.5" />}
-                          {pkg.estadoEntrega === 'EnAlmacen' && <Clock className="w-3.5 h-3.5" />}
-                          {pkg.estadoEntrega === 'Entregado'
-                            ? 'Entregado'
-                            : isEnRuta
-                            ? 'En Camioneta'
-                            : 'En Almacén Lince'}
-                        </span>
-                      </td>
+                          <MessageCircle style={{ width: '13px', height: '13px' }} />
+                          <span>Abrir Vista Chofer</span>
+                        </button>
 
-                      {/* Acciones Operativas */}
-                      <td style={{ padding: '10px 14px', textAlign: 'center' }}>
-                        <div style={{ display: 'flex', gap: '6px', justifyContent: 'center', alignItems: 'center' }}>
-                          {/* Botón Cargar a Camioneta */}
-                          {pkg.estadoEntrega === 'EnAlmacen' && (
-                            <button
-                              onClick={() => handleLoadToCar(pkg)}
-                              style={{
-                                background: '#2563eb',
-                                border: 'none',
-                                color: '#ffffff',
-                                padding: '4px 10px',
-                                borderRadius: '6px',
-                                cursor: 'pointer',
-                                fontSize: '11.5px',
-                                fontWeight: 800,
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '4px'
-                              }}
-                            >
-                              <Truck className="w-3.5 h-3.5" /> Cargar al Carro
-                            </button>
-                          )}
-
-                          {/* Botón Confirmar Entrega */}
-                          {isEnRuta && (
-                            <>
-                              <button
-                                onClick={() => openConfirmDeliveryModal(pkg)}
-                                style={{
-                                  background: '#16a34a',
-                                  border: 'none',
-                                  color: '#ffffff',
-                                  padding: '4px 10px',
-                                  borderRadius: '6px',
-                                  cursor: 'pointer',
-                                  fontSize: '11.5px',
-                                  fontWeight: 800,
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: '4px'
-                                }}
-                              >
-                                <Check className="w-3.5 h-3.5" /> Entregado
-                              </button>
-
-                              <button
-                                onClick={() => handleReprogramDelivery(pkg)}
-                                title="No entregado / Devolver a almacén para reprogramar"
-                                style={{
-                                  background: '#fee2e2',
-                                  border: '1px solid #fecaca',
-                                  color: '#dc2626',
-                                  padding: '4px 8px',
-                                  borderRadius: '6px',
-                                  cursor: 'pointer',
-                                  fontSize: '11px',
-                                  fontWeight: 800,
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: '4px'
-                                }}
-                              >
-                                <RotateCcw className="w-3.5 h-3.5" /> Reprogramar
-                              </button>
-                            </>
-                          )}
-
-                          {/* Botón Imprimir Rótulo Térmico */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                           <button
-                            title="Imprimir Rótulo Térmico 4x6"
-                            onClick={() => setSelectedThermalPkg(pkg)}
-                            style={{
-                              background: '#f8fafc',
-                              border: '1px solid #cbd5e1',
-                              color: '#334155',
-                              width: '28px',
-                              height: '28px',
-                              borderRadius: '6px',
-                              cursor: 'pointer',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center'
+                            type="button"
+                            onClick={() => {
+                              setEditingRoute(r);
+                              setIsNewRouteModalOpen(true);
                             }}
+                            style={{ padding: '6px', color: '#2563eb', background: '#eff6ff', border: 'none', borderRadius: '6px', cursor: 'pointer' }}
+                            title="Editar destinos"
                           >
-                            <Printer className="w-3.5 h-3.5" />
+                            <Edit2 style={{ width: '14px', height: '14px' }} />
                           </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
-                          {/* Botón Factura PDF */}
-                          {pkg.facturaPdfUrl && (
-                            <button
-                              title="Ver Factura PDF"
-                              onClick={() => onViewPdf(pkg.facturaPdfUrl!)}
+        {/* ==============================================================
+            SUB-TAB 2: VISTA CHOFER (CON BOTÓN WHATSAPP DIRECTO)
+            ============================================================== */}
+        {activeSubTab === 'chofer' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            {/* Cabecera de la Ruta para el Chofer */}
+            <div
+              style={{
+                background: '#0f172a',
+                color: '#ffffff',
+                borderRadius: '12px',
+                padding: '14px 18px',
+                display: 'flex',
+                flexWrap: 'wrap',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: '12px'
+              }}
+            >
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ fontSize: '16px', fontWeight: 900 }}>🚚 Hoja de Ruta: {activeRoute?.codigoRuta}</span>
+                  <span style={{ padding: '2px 8px', borderRadius: '9999px', fontSize: '10.5px', fontWeight: 800, background: 'rgba(16,185,129,0.2)', color: '#34d399', border: '1px solid rgba(52,211,153,0.3)' }}>
+                    {activeRoute?.estado}
+                  </span>
+                </div>
+                <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '3px' }}>
+                  Chofer: <b>{activeRoute?.choferNombre}</b> • Fecha: <b>{activeRoute?.fechaRuta}</b> • Vehículo: {activeRoute?.vehiculoPlaca}
+                </div>
+              </div>
+
+              {/* Selector de Ruta activa */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <select
+                  value={selectedRouteId || ''}
+                  onChange={e => setSelectedRouteId(e.target.value)}
+                  style={{ padding: '6px 10px', background: '#1e293b', color: '#ffffff', border: '1px solid #334155', borderRadius: '8px', fontSize: '12px', fontWeight: 700, outline: 'none' }}
+                >
+                  {hojasRuta.map(r => (
+                    <option key={r.id} value={r.id}>
+                      {r.codigoRuta} ({r.fechaRuta})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {/* Lista de Destinos / Paradas del Chofer */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div style={{ fontSize: '13px', fontWeight: 900, color: '#0f172a', textTransform: 'uppercase' }}>
+                Destinos a Repartir ({activeRoute?.destinos?.length || 0} Paradas • {activeRoute?.totalPaquetes || 0} Bultos)
+              </div>
+
+              {(!activeRoute?.destinos || activeRoute.destinos.length === 0) ? (
+                <div style={{ padding: '36px', textAlign: 'center', background: '#ffffff', borderRadius: '12px', border: '1px dashed #cbd5e1', color: '#94a3b8' }}>
+                  Esta hoja de ruta no tiene paradas registradas.
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  {activeRoute.destinos.map((dest, idx) => {
+                    const isDelivered = dest.estadoEntrega === 'ENTREGADO';
+                    const isFailed = dest.estadoEntrega === 'NO_ATENDIO';
+
+                    // Generar link de WhatsApp con mensaje personalizado
+                    const waLink = generateDriverWhatsAppUrl({
+                      clienteNombre: dest.clienteNombre,
+                      telefono: dest.telefono,
+                      direccion: dest.direccion,
+                      distrito: dest.distrito,
+                      codigosWrs: dest.codigosWrs,
+                      cantidadPaquetes: dest.cantidadPaquetes,
+                      choferNombre: activeRoute.choferNombre,
+                      montoCobrar: dest.montoCobrar,
+                      monedaCobro: dest.monedaCobro
+                    });
+
+                    // Generar link de Google Maps
+                    const mapsLink = generateMapsUrl(dest.direccion, dest.distrito);
+
+                    return (
+                      <div
+                        key={dest.id}
+                        style={{
+                          background: isDelivered ? '#f0fdf4' : isFailed ? '#fef2f2' : '#ffffff',
+                          border: isDelivered ? '1.5px solid #86efac' : isFailed ? '1.5px solid #fca5a5' : '1.5px solid #cbd5e1',
+                          borderRadius: '14px',
+                          padding: '16px',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '12px',
+                          boxShadow: '0 2px 6px rgba(0,0,0,0.03)'
+                        }}
+                      >
+                        {/* Cabecera de la Parada */}
+                        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                            <span
                               style={{
-                                background: '#fef2f2',
-                                border: '1px solid #fecaca',
-                                color: '#dc2626',
                                 width: '28px',
                                 height: '28px',
-                                borderRadius: '6px',
-                                cursor: 'pointer',
+                                borderRadius: '50%',
+                                background: isDelivered ? '#10b981' : '#2563eb',
+                                color: '#ffffff',
+                                fontSize: '13px',
+                                fontWeight: 900,
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center'
                               }}
                             >
-                              <FileText className="w-3.5 h-3.5" />
-                            </button>
-                          )}
+                              {idx + 1}
+                            </span>
+                            <div>
+                              <div style={{ fontSize: '14.5px', fontWeight: 900, color: '#0f172a' }}>
+                                {dest.clienteNombre}
+                              </div>
+                              <div style={{ fontSize: '12px', fontWeight: 700, color: '#64748b' }}>
+                                Casillero: {dest.clienteCasillero || 'AMEX'} • Tel: <span style={{ fontFamily: 'monospace', color: '#0f172a' }}>{dest.telefono}</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          <span
+                            style={{
+                              padding: '3px 10px',
+                              borderRadius: '9999px',
+                              fontSize: '11px',
+                              fontWeight: 900,
+                              background: isDelivered ? '#dcfce7' : isFailed ? '#fee2e2' : '#f1f5f9',
+                              color: isDelivered ? '#15803d' : isFailed ? '#b91c1c' : '#475569'
+                            }}
+                          >
+                            {isDelivered ? '✓ ENTREGADO' : isFailed ? '⚠️ NO ATENDIÓ' : '⏳ PENDIENTE'}
+                          </span>
                         </div>
-                      </td>
-                    </tr>
-                  );
-                })
+
+                        {/* Dirección y WRs */}
+                        <div style={{ background: '#f8fafc', padding: '10px 12px', borderRadius: '8px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                          <div style={{ fontSize: '12.5px', color: '#1e293b', fontWeight: 600 }}>
+                            📍 <b>{dest.direccion}</b> ({dest.distrito})
+                            {dest.referencia && <span style={{ color: '#64748b' }}> - Ref: {dest.referencia}</span>}
+                          </div>
+
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                            <span style={{ fontSize: '11.5px', fontWeight: 800, color: '#2563eb', background: '#eff6ff', padding: '2px 8px', borderRadius: '4px' }}>
+                              📦 {dest.cantidadPaquetes} {dest.cantidadPaquetes === 1 ? 'Paquete' : 'Paquetes'}
+                            </span>
+                            {dest.codigosWrs.map(wr => (
+                              <span key={wr} style={{ fontFamily: 'monospace', fontWeight: 800, fontSize: '11px', background: '#ffffff', border: '1px solid #cbd5e1', padding: '2px 6px', borderRadius: '4px', color: '#0f172a' }}>
+                                {wr}
+                              </span>
+                            ))}
+
+                            {dest.montoCobrar && dest.montoCobrar > 0 ? (
+                              <span style={{ fontSize: '11.5px', fontWeight: 900, color: '#b45309', background: '#fef3c7', padding: '2px 8px', borderRadius: '4px' }}>
+                                💰 Cobrar: S/. {dest.montoCobrar.toFixed(2)}
+                              </span>
+                            ) : null}
+                          </div>
+                        </div>
+
+                        {/* Botonera Rápida para el Chofer */}
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap', paddingTop: '4px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                            {/* 🟢 BOTÓN DIRECTO A WHATSAPP CON MENSAJE */}
+                            <a
+                              href={waLink}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              style={{
+                                padding: '8px 14px',
+                                background: '#25d366',
+                                color: '#ffffff',
+                                borderRadius: '8px',
+                                fontSize: '12px',
+                                fontWeight: 900,
+                                textDecoration: 'none',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                boxShadow: '0 2px 6px rgba(37,211,102,0.3)'
+                              }}
+                            >
+                              <MessageCircle style={{ width: '16px', height: '16px' }} />
+                              <span>WhatsApp al Cliente</span>
+                            </a>
+
+                            {/* 🗺️ BOTÓN GPS / GOOGLE MAPS */}
+                            <a
+                              href={mapsLink}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              style={{
+                                padding: '8px 12px',
+                                background: '#ffffff',
+                                color: '#2563eb',
+                                border: '1px solid #bfdbfe',
+                                borderRadius: '8px',
+                                fontSize: '12px',
+                                fontWeight: 800,
+                                textDecoration: 'none',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '6px'
+                              }}
+                            >
+                              <Navigation style={{ width: '14px', height: '14px' }} />
+                              <span>Ver en Maps</span>
+                            </a>
+
+                            {/* 📞 LLAMAR */}
+                            <a
+                              href={`tel:${dest.telefono}`}
+                              style={{
+                                padding: '8px 12px',
+                                background: '#ffffff',
+                                color: '#475569',
+                                border: '1px solid #cbd5e1',
+                                borderRadius: '8px',
+                                fontSize: '12px',
+                                fontWeight: 800,
+                                textDecoration: 'none',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px'
+                              }}
+                            >
+                              <Phone style={{ width: '14px', height: '14px' }} />
+                              <span>Llamar</span>
+                            </a>
+                          </div>
+
+                          {/* Estados de Entrega (1-clic) */}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <button
+                              type="button"
+                              onClick={() => handleUpdateDestinoStatus(activeRoute.id, dest.id, 'ENTREGADO')}
+                              style={{
+                                padding: '7px 12px',
+                                background: isDelivered ? '#059669' : '#ffffff',
+                                color: isDelivered ? '#ffffff' : '#059669',
+                                border: '1px solid #059669',
+                                borderRadius: '8px',
+                                fontSize: '11.5px',
+                                fontWeight: 900,
+                                cursor: 'pointer'
+                              }}
+                            >
+                              ✓ Entregado
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => handleUpdateDestinoStatus(activeRoute.id, dest.id, 'NO_ATENDIO')}
+                              style={{
+                                padding: '7px 12px',
+                                background: isFailed ? '#dc2626' : '#ffffff',
+                                color: isFailed ? '#ffffff' : '#dc2626',
+                                border: '1px solid #dc2626',
+                                borderRadius: '8px',
+                                fontSize: '11.5px',
+                                fontWeight: 800,
+                                cursor: 'pointer'
+                              }}
+                            >
+                              ⚠️ No Atendió
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               )}
-            </tbody>
-          </table>
-        </div>
+            </div>
+          </div>
+        )}
+
+        {/* ==============================================================
+            SUB-TAB 3: HISTORIAL POR AÑO > MES > DÍA
+            ============================================================== */}
+        {activeSubTab === 'historial' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div style={{ fontSize: '13px', fontWeight: 900, color: '#0f172a', textTransform: 'uppercase' }}>
+              Historial de Despachos Organizado por Año / Mes / Día
+            </div>
+
+            {Object.keys(historyTree).length === 0 ? (
+              <div style={{ padding: '36px', textAlign: 'center', background: '#ffffff', borderRadius: '12px', border: '1px dashed #cbd5e1', color: '#94a3b8' }}>
+                No hay historial de hojas de ruta aún.
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                {Object.entries(historyTree).map(([year, months]) => {
+                  const isYearOpen = !!expandedYears[year];
+
+                  return (
+                    <div
+                      key={year}
+                      style={{
+                        background: '#ffffff',
+                        border: '1px solid #cbd5e1',
+                        borderRadius: '12px',
+                        overflow: 'hidden'
+                      }}
+                    >
+                      {/* Cabecera de Año */}
+                      <div
+                        onClick={() => toggleYear(year)}
+                        style={{
+                          padding: '12px 16px',
+                          background: '#0f172a',
+                          color: '#ffffff',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 900, fontSize: '14px' }}>
+                          <Calendar style={{ width: '16px', height: '16px', color: '#38bdf8' }} />
+                          <span>Año {year}</span>
+                        </div>
+                        {isYearOpen ? <ChevronDown style={{ width: '18px', height: '18px' }} /> : <ChevronRight style={{ width: '18px', height: '18px' }} />}
+                      </div>
+
+                      {/* Meses */}
+                      {isYearOpen && (
+                        <div style={{ padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                          {Object.entries(months).map(([monthName, days]) => {
+                            const monthKey = `${year}-${monthName}`;
+                            const isMonthOpen = !!expandedMonths[monthKey];
+
+                            return (
+                              <div
+                                key={monthKey}
+                                style={{
+                                  border: '1px solid #e2e8f0',
+                                  borderRadius: '8px',
+                                  overflow: 'hidden'
+                                }}
+                              >
+                                <div
+                                  onClick={() => toggleMonth(monthKey)}
+                                  style={{
+                                    padding: '10px 14px',
+                                    background: '#f8fafc',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'space-between',
+                                    cursor: 'pointer',
+                                    fontWeight: 800,
+                                    fontSize: '13px',
+                                    color: '#1e293b'
+                                  }}
+                                >
+                                  <span>📅 {monthName} ({Object.values(days).flat().length} Hojas de Ruta)</span>
+                                  {isMonthOpen ? <ChevronDown style={{ width: '16px', height: '16px' }} /> : <ChevronRight style={{ width: '16px', height: '16px' }} />}
+                                </div>
+
+                                {isMonthOpen && (
+                                  <div style={{ padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                    {Object.entries(days).map(([day, routes]) => (
+                                      <div key={day} style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                        <div style={{ fontSize: '11.5px', fontWeight: 800, color: '#2563eb' }}>
+                                          Día {day}:
+                                        </div>
+
+                                        {routes.map(r => (
+                                          <div
+                                            key={r.id}
+                                            style={{
+                                              padding: '8px 12px',
+                                              background: '#ffffff',
+                                              border: '1px solid #cbd5e1',
+                                              borderRadius: '6px',
+                                              display: 'flex',
+                                              alignItems: 'center',
+                                              justifyContent: 'space-between',
+                                              gap: '8px'
+                                            }}
+                                          >
+                                            <div>
+                                              <span style={{ fontFamily: 'monospace', fontWeight: 900, fontSize: '12px', color: '#0f172a' }}>
+                                                {r.codigoRuta}
+                                              </span>
+                                              <span style={{ fontSize: '11.5px', color: '#64748b', marginLeft: '8px' }}>
+                                                👤 {r.choferNombre} • 📍 {r.totalDestinos} destinos ({r.totalPaquetes} paquetes)
+                                              </span>
+                                            </div>
+
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                setSelectedRouteId(r.id);
+                                                setActiveSubTab('chofer');
+                                              }}
+                                              style={{
+                                                padding: '4px 10px',
+                                                background: '#eff6ff',
+                                                color: '#1d4ed8',
+                                                border: '1px solid #bfdbfe',
+                                                borderRadius: '6px',
+                                                fontSize: '11px',
+                                                fontWeight: 800,
+                                                cursor: 'pointer'
+                                              }}
+                                            >
+                                              Ver Ruta
+                                            </button>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
-      {/* MODAL DE CONFIRMACIÓN DE ENTREGA */}
-      {confirmDeliveryPkg && (
-        <div className="modal-backdrop">
-          <div className="modal-dialog" style={{ maxWidth: '460px' }}>
-            <div className="modal-header">
-              <span className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#16a34a' }}>
-                <CheckCircle2 className="w-5 h-5" /> Confirmar Entrega de Paquete
-              </span>
-              <button
-                onClick={() => setConfirmDeliveryPkg(null)}
-                style={{ background: 'none', border: 'none', fontSize: '18px', cursor: 'pointer', color: '#64748b' }}
-              >
-                ✕
-              </button>
-            </div>
-
-            <form onSubmit={handleExecuteConfirmDelivery} className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <div style={{ background: '#f8fafc', padding: '10px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '12px' }}>
-                <div><strong>Guía WR:</strong> <span style={{ fontFamily: 'monospace', color: '#2563eb' }}>{confirmDeliveryPkg.numeroReciboBodega}</span></div>
-                <div><strong>Casillero:</strong> {confirmDeliveryPkg.codigoCasillero}</div>
-                <div><strong>Dirección:</strong> {confirmDeliveryPkg.cliente?.direccionEntrega || 'Dirección de entrega'} ({confirmDeliveryPkg.cliente?.distrito || 'Lima'})</div>
-              </div>
-
-              <div className="form-group">
-                <label style={{ fontSize: '12px', fontWeight: 800, color: '#334155' }}>Nombre de Quien Recibe</label>
-                <input
-                  type="text"
-                  value={deliveryNotes.recibidoPor}
-                  onChange={e => setDeliveryNotes({ ...deliveryNotes, recibidoPor: e.target.value })}
-                  placeholder="Ej: Juan Pérez (Titular / Familiar)"
-                  className="form-control"
-                  required
-                />
-              </div>
-
-              <div className="form-group">
-                <label style={{ fontSize: '12px', fontWeight: 800, color: '#334155' }}>DNI / Documento del Receptor</label>
-                <input
-                  type="text"
-                  value={deliveryNotes.dniReceptor}
-                  onChange={e => setDeliveryNotes({ ...deliveryNotes, dniReceptor: e.target.value })}
-                  placeholder="Ej: 72891234"
-                  className="form-control"
-                />
-              </div>
-
-              <div className="form-group">
-                <label style={{ fontSize: '12px', fontWeight: 800, color: '#334155' }}>Observaciones de Entrega</label>
-                <input
-                  type="text"
-                  value={deliveryNotes.observaciones}
-                  onChange={e => setDeliveryNotes({ ...deliveryNotes, observaciones: e.target.value })}
-                  placeholder="Ej: Entregado en recepción / Firma conforme"
-                  className="form-control"
-                />
-              </div>
-
-              <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '10px' }}>
-                <button
-                  type="button"
-                  onClick={() => setConfirmDeliveryPkg(null)}
-                  className="btn btn-secondary"
-                >
-                  Cancelar
-                </button>
-                <button type="submit" className="btn btn-primary" style={{ background: '#16a34a', borderColor: '#16a34a', fontWeight: 800 }}>
-                  ✓ Confirmar Entrega Exitosa
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL DE HOJA DE RUTA IMPRIMIBLE */}
-      {isRouteManifestOpen && (
-        <div className="modal-backdrop">
-          <div className="modal-dialog" style={{ maxWidth: '850px' }}>
-            <div className="modal-header">
-              <span className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#2563eb' }}>
-                <Printer className="w-5 h-5" /> Hoja de Ruta de Reparto AMEX Courier
-              </span>
-              <button
-                onClick={() => setIsRouteManifestOpen(false)}
-                style={{ background: 'none', border: 'none', fontSize: '18px', cursor: 'pointer', color: '#64748b' }}
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              <div style={{ border: '2px solid #0f172a', borderRadius: '10px', padding: '16px', background: '#ffffff' }}>
-                {/* Cabecera de la Hoja de Ruta */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '2px solid #0f172a', paddingBottom: '10px', marginBottom: '12px' }}>
-                  <div>
-                    <h2 style={{ fontSize: '16px', fontWeight: 900, color: '#0f172a', margin: 0 }}>
-                      AMEX COURIER SAC - HOJA DE RUTA DE REPARTO
-                    </h2>
-                    <div style={{ fontSize: '11px', color: '#475569' }}>Sede Central Lince · Reparto Local a Domicilio</div>
-                    <div style={{ fontSize: '11px', color: '#475569' }}>
-                      Conductor: <strong>{driverName}</strong> | Vehículo: <strong>{vehiclePlate}</strong>
-                    </div>
-                  </div>
-
-                  <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontSize: '12px', fontWeight: 900, color: '#2563eb' }}>
-                      {routeZone}
-                    </div>
-                    <div style={{ fontSize: '10.5px', color: '#64748b' }}>
-                      Fecha: {new Date().toLocaleDateString('es-PE')}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Tabla de Paradas */}
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
-                  <thead>
-                    <tr style={{ background: '#f1f5f9', borderBottom: '1px solid #cbd5e1', color: '#334155', fontWeight: 800 }}>
-                      <th style={{ padding: '6px 8px', textAlign: 'left' }}>#</th>
-                      <th style={{ padding: '6px 8px', textAlign: 'left' }}>Guía WR</th>
-                      <th style={{ padding: '6px 8px', textAlign: 'left' }}>Casillero / Cliente</th>
-                      <th style={{ padding: '6px 8px', textAlign: 'left' }}>Dirección & Distrito</th>
-                      <th style={{ padding: '6px 8px', textAlign: 'left' }}>Teléfono</th>
-                      <th style={{ padding: '6px 8px', textAlign: 'center' }}>Peso (Kg)</th>
-                      <th style={{ padding: '6px 8px', textAlign: 'center', width: '120px' }}>Firma / DNI Receptor</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredList.map((p, idx) => (
-                      <tr key={p.id} style={{ borderBottom: '1px solid #e2e8f0' }}>
-                        <td style={{ padding: '6px 8px', fontWeight: 800 }}>{idx + 1}</td>
-                        <td style={{ padding: '6px 8px', fontFamily: 'monospace', fontWeight: 800 }}>{p.numeroReciboBodega}</td>
-                        <td style={{ padding: '6px 8px' }}>
-                          <div style={{ fontWeight: 700 }}>{p.nombreConsignatario || p.cliente?.nombre}</div>
-                          <div style={{ fontSize: '10px', color: '#2563eb' }}>{p.codigoCasillero}</div>
-                        </td>
-                        <td style={{ padding: '6px 8px' }}>
-                          <div>{p.cliente?.direccionEntrega || 'Dirección de contacto'}</div>
-                          <div style={{ fontSize: '10px', color: '#64748b', fontWeight: 700 }}>{p.cliente?.distrito || 'Lima'}</div>
-                        </td>
-                        <td style={{ padding: '6px 8px' }}>{p.cliente?.telefono || '-'}</td>
-                        <td style={{ padding: '6px 8px', textAlign: 'center' }}>{p.pesoKg} Kg</td>
-                        <td style={{ padding: '6px 8px', borderLeft: '1px solid #e2e8f0', minHeight: '30px' }}></td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-
-                {/* Pie de firmas */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginTop: '40px', paddingTop: '10px' }}>
-                  <div style={{ borderTop: '1px dashed #64748b', textAlign: 'center', fontSize: '11px', color: '#475569' }}>
-                    Despachado por: Supervisor Almacén Lince
-                  </div>
-                  <div style={{ borderTop: '1px dashed #64748b', textAlign: 'center', fontSize: '11px', color: '#475569' }}>
-                    Conductor Responsable: {driverName}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="modal-footer" style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-              <button
-                type="button"
-                onClick={() => setIsRouteManifestOpen(false)}
-                className="btn btn-secondary"
-              >
-                Cerrar
-              </button>
-              <button
-                type="button"
-                onClick={() => window.print()}
-                className="btn btn-primary"
-                style={{ fontWeight: 800, display: 'flex', alignItems: 'center', gap: '6px' }}
-              >
-                <Printer className="w-4 h-4" /> Imprimir Hoja de Ruta
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL DE RÓTULO TÉRMICO */}
-      {selectedThermalPkg && (
-        <ThermalLabelModal
-          pkg={selectedThermalPkg}
-          onClose={() => setSelectedThermalPkg(null)}
-        />
-      )}
+      {/* Modal de Creación / Edición de Ruta */}
+      <NewRouteModal
+        isOpen={isNewRouteModalOpen}
+        onClose={() => setIsNewRouteModalOpen(false)}
+        onSave={handleSaveHojaRuta}
+        existingRoute={editingRoute}
+        clientes={clientes}
+        paquetes={paquetes}
+        currentUser={currentUser}
+      />
     </div>
   );
 }
