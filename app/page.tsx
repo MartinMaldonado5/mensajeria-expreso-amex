@@ -12,21 +12,57 @@ import {
   CobroVoucher
 } from '@/types';
 import { supabase } from '@/lib/supabase/client';
+import dynamic from 'next/dynamic';
 import HeaderBar from '@/components/HeaderBar';
 import Sidebar from '@/components/Sidebar';
-import DashboardTab from '@/components/tabs/DashboardTab';
-import InventoryTab from '@/components/tabs/InventoryTab';
-import EntregasTab from '@/components/tabs/EntregasTab';
-import CobrosTab from '@/components/tabs/CobrosTab';
-import DeliveriesTab from '@/components/tabs/DeliveriesTab';
-import PickingTab from '@/components/tabs/PickingTab';
-import ScannerTab from '@/components/tabs/ScannerTab';
-import LiveSheetsTab from '@/components/tabs/LiveSheetsTab';
-import NewClientModal, { NewClientFormData } from '@/components/modals/NewClientModal';
-import NewPackageModal, { NewPkgFormData } from '@/components/modals/NewPackageModal';
-import ThermalLabelModal from '@/components/modals/ThermalLabelModal';
-import PdfViewerModal from '@/components/modals/PdfViewerModal';
+import { NewClientFormData } from '@/components/modals/NewClientModal';
+import { NewPkgFormData } from '@/components/modals/NewPackageModal';
 import { PageSkeleton } from '@/components/ui/Skeleton';
+
+const DashboardTab = dynamic(() => import('@/components/tabs/DashboardTab'), {
+  ssr: false,
+  loading: () => <PageSkeleton />
+});
+
+const InventoryTab = dynamic(() => import('@/components/tabs/InventoryTab'), {
+  ssr: false,
+  loading: () => <PageSkeleton />
+});
+
+const EntregasTab = dynamic(() => import('@/components/tabs/EntregasTab'), {
+  ssr: false,
+  loading: () => <PageSkeleton />
+});
+
+const CobrosTab = dynamic(() => import('@/components/tabs/CobrosTab'), {
+  ssr: false,
+  loading: () => <PageSkeleton />
+});
+
+const DeliveriesTab = dynamic(() => import('@/components/tabs/DeliveriesTab'), {
+  ssr: false,
+  loading: () => <PageSkeleton />
+});
+
+const PickingTab = dynamic(() => import('@/components/tabs/PickingTab'), {
+  ssr: false,
+  loading: () => <PageSkeleton />
+});
+
+const ScannerTab = dynamic(() => import('@/components/tabs/ScannerTab'), {
+  ssr: false,
+  loading: () => <PageSkeleton />
+});
+
+const LiveSheetsTab = dynamic(() => import('@/components/tabs/LiveSheetsTab'), {
+  ssr: false,
+  loading: () => <PageSkeleton />
+});
+
+const NewClientModal = dynamic(() => import('@/components/modals/NewClientModal'), { ssr: false });
+const NewPackageModal = dynamic(() => import('@/components/modals/NewPackageModal'), { ssr: false });
+const ThermalLabelModal = dynamic(() => import('@/components/modals/ThermalLabelModal'), { ssr: false });
+const PdfViewerModal = dynamic(() => import('@/components/modals/PdfViewerModal'), { ssr: false });
 
 const EMPTY_CLIENT_FORM: NewClientFormData = {
   nombre: '',

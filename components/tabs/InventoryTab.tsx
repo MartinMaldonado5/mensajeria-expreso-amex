@@ -71,6 +71,10 @@ export default function InventoryTab({
   const [packageTypeFilter, setPackageTypeFilter] = useState<string>('ALL');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
 
+  // Paginación reactiva
+  const [pageSize, setPageSize] = useState<number>(50);
+  const [currentPage, setCurrentPage] = useState<number>(1);
+
   // Filtros de Kardex
   const [kardexSearch, setKardexSearch] = useState('');
   const [kardexTypeFilter, setKardexTypeFilter] = useState<string>('ALL');
@@ -305,6 +309,17 @@ export default function InventoryTab({
       return matchesSearch && matchesLocation && matchesShelf && matchesFloor && matchesType && matchesStatus;
     });
   }, [paquetes, searchTerm, locationFilter, shelfFilter, floorFilter, packageTypeFilter, statusFilter]);
+
+  // Resetear página al cambiar cualquier filtro
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, locationFilter, shelfFilter, floorFilter, packageTypeFilter, statusFilter, pageSize]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredPaquetes.length / pageSize));
+  const paginatedPaquetes = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredPaquetes.slice(start, start + pageSize);
+  }, [filteredPaquetes, currentPage, pageSize]);
 
   // Filtrado reactivo de Kardex con Motor Fuzzy
   const filteredKardex = useMemo(() => {
@@ -1216,7 +1231,7 @@ export default function InventoryTab({
                       </td>
                     </tr>
                   ) : (
-                    filteredPaquetes.map(pkg => {
+                    paginatedPaquetes.map(pkg => {
                       const pos =
                         pkg.posicionEstante ||
                         (pkg.anaquel && pkg.piso ? `${pkg.anaquel}-${pkg.piso}` : 'REC');
@@ -1269,128 +1284,110 @@ export default function InventoryTab({
                                 textOverflow: 'ellipsis'
                               }}
                             >
-                              {pkg.descripcion}
+                              {pkg.descripcion || 'Sin descripción'}
                             </div>
+                            <div style={{ fontSize: '11px', color: '#64748b' }}>
+                              {pkg.tipoEmpaque || 'CAJA'}
+                            </div>
+                          </td>
+                          <td style={{ padding: '10px 14px' }}>
+                            <div style={{ fontWeight: 800, color: '#0f172a' }}>
+                              {Number(pkg.pesoKg || 0).toFixed(2)} kg
+                            </div>
+                            <div style={{ fontSize: '11px', color: '#059669', fontWeight: 700 }}>
+                              ${Number(pkg.valorDeclaradoUsd || 0).toFixed(2)} USD
+                            </div>
+                          </td>
+                          <td style={{ padding: '10px 14px' }}>
                             <span
                               style={{
-                                fontSize: '10px',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                                padding: '2px 8px',
+                                borderRadius: '9999px',
+                                fontSize: '11px',
                                 fontWeight: 800,
-                                padding: '2px 6px',
-                                borderRadius: '4px',
-                                background: '#f1f5f9',
-                                color: '#475569'
+                                background:
+                                  pkg.ubicacionActual === 'AmexLince'
+                                    ? '#dcfce7'
+                                    : pkg.ubicacionActual === 'TibCourierMiami'
+                                    ? '#dbeafe'
+                                    : '#fef3c7',
+                                color:
+                                  pkg.ubicacionActual === 'AmexLince'
+                                    ? '#15803d'
+                                    : pkg.ubicacionActual === 'TibCourierMiami'
+                                    ? '#1e40af'
+                                    : '#b45309'
                               }}
                             >
-                              {pkg.tipoEmpaque}
+                              <MapPin className="w-3 h-3" />
+                              {pkg.ubicacionActual === 'AmexLince'
+                                ? 'Sede Lince'
+                                : pkg.ubicacionActual === 'TibCourierMiami'
+                                ? 'Miami Hub'
+                                : pkg.ubicacionActual || 'Almacén'}
                             </span>
                           </td>
                           <td style={{ padding: '10px 14px' }}>
-                            <div style={{ fontWeight: 800, color: '#0f172a' }}>{pkg.pesoKg} Kg</div>
-                            <div style={{ fontSize: '11px', color: '#16a34a', fontWeight: 700 }}>
-                              ${pkg.valorDeclaradoUsd} USD
-                            </div>
+                            <span
+                              style={{
+                                fontFamily: 'monospace',
+                                fontWeight: 900,
+                                fontSize: '12px',
+                                padding: '3px 8px',
+                                borderRadius: '6px',
+                                background: pos.startsWith('REC') ? '#fef3c7' : '#eff6ff',
+                                color: pos.startsWith('REC') ? '#b45309' : '#1d4ed8',
+                                border: pos.startsWith('REC') ? '1px solid #fde68a' : '1px solid #bfdbfe'
+                              }}
+                            >
+                              📍 {pos}
+                            </span>
                           </td>
                           <td style={{ padding: '10px 14px' }}>
                             <span
                               style={{
-                                fontSize: '11px',
-                                fontWeight: 800,
                                 padding: '3px 8px',
                                 borderRadius: '6px',
+                                fontSize: '11px',
+                                fontWeight: 800,
+                                textTransform: 'uppercase',
                                 background:
-                                  pkg.ubicacionActual === 'TibCourierMiami'
-                                    ? '#dbeafe'
-                                    : pkg.ubicacionActual === 'TibTingoMaria'
-                                    ? '#fef3c7'
-                                    : pkg.ubicacionActual === 'AmexLince'
+                                  pkg.estadoEntrega === 'EntregadoDomicilio' || pkg.estadoEntrega === 'RecogidoAlmacen'
                                     ? '#dcfce7'
+                                    : pkg.estadoEntrega === 'EnRutaCarroAmex'
+                                    ? '#dbeafe'
                                     : '#f1f5f9',
                                 color:
-                                  pkg.ubicacionActual === 'TibCourierMiami'
-                                    ? '#1e40af'
-                                    : pkg.ubicacionActual === 'TibTingoMaria'
-                                    ? '#92400e'
-                                    : pkg.ubicacionActual === 'AmexLince'
-                                    ? '#166534'
+                                  pkg.estadoEntrega === 'EntregadoDomicilio' || pkg.estadoEntrega === 'RecogidoAlmacen'
+                                    ? '#15803d'
+                                    : pkg.estadoEntrega === 'EnRutaCarroAmex'
+                                    ? '#1d4ed8'
                                     : '#475569'
                               }}
                             >
-                              {pkg.ubicacionActual}
+                              {pkg.estadoEntrega === 'EnAlmacen'
+                                ? 'En Almacén'
+                                : pkg.estadoEntrega === 'EnRutaCarroAmex'
+                                ? 'En Ruta'
+                                : pkg.estadoEntrega === 'ListoParaRecojo'
+                                ? 'Listo Recojo'
+                                : pkg.estadoEntrega === 'EntregadoDomicilio'
+                                ? 'Entregado'
+                                : pkg.estadoEntrega || 'En Almacén'}
                             </span>
                           </td>
-                          <td style={{ padding: '10px 14px' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                              <span
-                                style={{
-                                  fontSize: '11.5px',
-                                  fontWeight: 800,
-                                  padding: '3px 8px',
-                                  borderRadius: '6px',
-                                  fontFamily: 'monospace',
-                                  background: pos.startsWith('A1')
-                                    ? '#eff6ff'
-                                    : pos.startsWith('A2')
-                                    ? '#f0fdf4'
-                                    : '#fefce8',
-                                  color: pos.startsWith('A1')
-                                    ? '#1d4ed8'
-                                    : pos.startsWith('A2')
-                                    ? '#15803d'
-                                    : '#b45309',
-                                  border: `1px solid ${
-                                    pos.startsWith('A1')
-                                      ? '#bfdbfe'
-                                      : pos.startsWith('A2')
-                                      ? '#bbf7d0'
-                                      : '#fde047'
-                                  }`
-                                }}
-                              >
-                                {pos}
-                              </span>
-                            </div>
-                          </td>
-                          <td style={{ padding: '10px 14px' }}>
-                            <select
-                              value={pkg.estadoEntrega}
-                              onChange={e => handleQuickStatusChange(pkg, e.target.value as TipoEstadoEntrega)}
-                              style={{
-                                fontSize: '11px',
-                                fontWeight: 800,
-                                padding: '4px 6px',
-                                borderRadius: '6px',
-                                border: '1px solid #cbd5e1',
-                                background:
-                                  pkg.estadoEntrega === 'Entregado'
-                                    ? '#dcfce7'
-                                    : pkg.estadoEntrega === 'EnRutaCarroAmex'
-                                    ? '#fef3c7'
-                                    : '#eff6ff',
-                                color:
-                                  pkg.estadoEntrega === 'Entregado'
-                                    ? '#166534'
-                                    : pkg.estadoEntrega === 'EnRutaCarroAmex'
-                                    ? '#92400e'
-                                    : '#1e40af',
-                                cursor: 'pointer',
-                                outline: 'none'
-                              }}
-                            >
-                              <option value="EnAlmacen">📦 En Almacén</option>
-                              <option value="EnRutaCarroAmex">🚚 En Ruta</option>
-                              <option value="ListoParaRecojo">🏪 Listo Recojo</option>
-                              <option value="Entregado">✅ Entregado</option>
-                            </select>
-                          </td>
                           <td style={{ padding: '10px 14px', textAlign: 'center' }}>
-                            <div style={{ display: 'flex', gap: '5px', justifyContent: 'center' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
                               <button
-                                title="Reubicar o Trasladar Anaquel/Piso"
+                                title="Mover a otro Estante / Anaquel"
                                 onClick={() => openTransferModal(pkg)}
                                 style={{
                                   background: '#eff6ff',
                                   border: '1px solid #bfdbfe',
-                                  color: '#1d4ed8',
+                                  color: '#2563eb',
                                   width: '28px',
                                   height: '28px',
                                   borderRadius: '6px',
@@ -1463,11 +1460,11 @@ export default function InventoryTab({
                               )}
 
                               <button
-                                title="Eliminar Paquete de Almacén"
+                                title="Eliminar Paquete"
                                 onClick={() => handleDeletePackage(pkg.id, pkg.numeroReciboBodega)}
                                 style={{
-                                  background: '#fef2f2',
-                                  border: '1px solid #fecaca',
+                                  background: '#fee2e2',
+                                  border: '1px solid #fca5a5',
                                   color: '#dc2626',
                                   width: '28px',
                                   height: '28px',
@@ -1489,6 +1486,97 @@ export default function InventoryTab({
                 </tbody>
               </table>
             </div>
+
+            {/* Barra de Paginación Reactiva */}
+            {filteredPaquetes.length > 0 && (
+              <div
+                style={{
+                  padding: '10px 16px',
+                  background: '#f8fafc',
+                  borderTop: '1px solid #e2e8f0',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  flexWrap: 'wrap',
+                  gap: '10px',
+                  fontSize: '12px'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#64748b' }}>
+                  <span>
+                    Mostrando <b>{Math.min((currentPage - 1) * pageSize + 1, filteredPaquetes.length)}</b> -{' '}
+                    <b>{Math.min(currentPage * pageSize, filteredPaquetes.length)}</b> de{' '}
+                    <b>{filteredPaquetes.length}</b> paquetes
+                  </span>
+
+                  <span style={{ color: '#cbd5e1' }}>•</span>
+
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <span>Por página:</span>
+                    <select
+                      value={pageSize}
+                      onChange={e => {
+                        setPageSize(Number(e.target.value));
+                        setCurrentPage(1);
+                      }}
+                      style={{
+                        padding: '2px 6px',
+                        borderRadius: '4px',
+                        border: '1px solid #cbd5e1',
+                        background: '#ffffff',
+                        fontSize: '12px',
+                        fontWeight: 700
+                      }}
+                    >
+                      <option value={25}>25</option>
+                      <option value={50}>50</option>
+                      <option value={100}>100</option>
+                      <option value={200}>200</option>
+                    </select>
+                  </label>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <button
+                    type="button"
+                    disabled={currentPage <= 1}
+                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                    style={{
+                      padding: '4px 10px',
+                      borderRadius: '6px',
+                      border: '1px solid #cbd5e1',
+                      background: currentPage <= 1 ? '#f1f5f9' : '#ffffff',
+                      color: currentPage <= 1 ? '#94a3b8' : '#0f172a',
+                      fontWeight: 700,
+                      cursor: currentPage <= 1 ? 'not-allowed' : 'pointer'
+                    }}
+                  >
+                    Anterior
+                  </button>
+
+                  <span style={{ padding: '4px 8px', fontWeight: 800, color: '#2563eb' }}>
+                    {currentPage} / {totalPages}
+                  </span>
+
+                  <button
+                    type="button"
+                    disabled={currentPage >= totalPages}
+                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                    style={{
+                      padding: '4px 10px',
+                      borderRadius: '6px',
+                      border: '1px solid #cbd5e1',
+                      background: currentPage >= totalPages ? '#f1f5f9' : '#ffffff',
+                      color: currentPage >= totalPages ? '#94a3b8' : '#0f172a',
+                      fontWeight: 700,
+                      cursor: currentPage >= totalPages ? 'not-allowed' : 'pointer'
+                    }}
+                  >
+                    Siguiente
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
