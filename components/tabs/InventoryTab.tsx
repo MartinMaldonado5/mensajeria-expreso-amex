@@ -95,11 +95,37 @@ export default function InventoryTab({
   const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isNewPositionModalOpen, setIsNewPositionModalOpen] = useState(false);
+  const [editingPosition, setEditingPosition] = useState<EstanteriaPosicion | null>(null);
   const [isBatchStatusModalOpen, setIsBatchStatusModalOpen] = useState(false);
   const [batchTargetStatus, setBatchTargetStatus] = useState<TipoEstadoEntrega>('EnAlmacen');
   const [selectedThermalPkg, setSelectedThermalPkg] = useState<Paquete | null>(null);
   const [inspectingPosition, setInspectingPosition] = useState<string | null>(null);
   const [selectedPackageForAction, setSelectedPackageForAction] = useState<Paquete | null>(null);
+
+  // Filtros interactivos para la vista de Anaqueles
+  const [shelfSearchTerm, setShelfSearchTerm] = useState('');
+  const [shelfZoneFilter, setShelfZoneFilter] = useState<string>('ALL');
+  const [shelfOccupancyFilter, setShelfOccupancyFilter] = useState<string>('ALL');
+
+  // Modo de creación de anaquel: 'batch' (Lote de N pisos) | 'single' (1 posición)
+  const [newPositionMode, setNewPositionMode] = useState<'batch' | 'single'>('batch');
+  const [batchShelfData, setBatchShelfData] = useState<{
+    almacenCodigo: string;
+    codigoEstante: string;
+    cantidadPisos: number;
+    capacidadPorPiso: number;
+    pesoPorPiso: number;
+    zonaTipo: string;
+    descripcion: string;
+  }>({
+    almacenCodigo: 'LIN',
+    codigoEstante: '',
+    cantidadPisos: 3,
+    capacidadPorPiso: 40,
+    pesoPorPiso: 150,
+    zonaTipo: 'ALMACENAJE',
+    descripcion: ''
+  });
 
   // Formulario de Traslado / Reubicación
   const [transferData, setTransferData] = useState<{
@@ -119,7 +145,7 @@ export default function InventoryTab({
   // Formulario de Edición de Paquete
   const [editFormData, setEditFormData] = useState<Partial<Paquete>>({});
 
-  // Formulario de Nueva Posición / Anaquel WMS
+  // Formulario de Nueva Posición Individual
   const [newPositionData, setNewPositionData] = useState<{
     almacenCodigo: string;
     codigoEstante: string;
@@ -609,7 +635,7 @@ export default function InventoryTab({
     }
   };
 
-  // Guardar Nueva Posición / Anaquel WMS
+  // Guardar Nueva Posición Individual
   const handleCreatePosition = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
@@ -649,6 +675,94 @@ export default function InventoryTab({
       }
     } catch (err) {
       console.warn('Error creating shelf position:', err);
+    }
+  };
+
+  // Crear Anaquel Completo en Lote (N Pisos de un solo clic)
+  const handleCreateBatchShelf = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const codigoEstanteClean = batchShelfData.codigoEstante.trim().toUpperCase();
+    if (!codigoEstanteClean) {
+      alert('Por favor ingresa un código para el anaquel (ej: A3, B1).');
+      return;
+    }
+
+    try {
+      const sede = sedesList.find(s => s.codigo === batchShelfData.almacenCodigo);
+      const almacenId = sede ? sede.id : null;
+
+      const newPositionsToInsert = [];
+      for (let i = 1; i <= batchShelfData.cantidadPisos; i++) {
+        const nivelPiso = `P${i}`;
+        const codigoPosicion = `${codigoEstanteClean}-${nivelPiso}`;
+        newPositionsToInsert.push({
+          almacen_id: almacenId,
+          codigo_estante: codigoEstanteClean,
+          nivel_piso: nivelPiso,
+          codigo_posicion: codigoPosicion,
+          zona_tipo: batchShelfData.zonaTipo,
+          capacidad_max_paquetes: Number(batchShelfData.capacidadPorPiso),
+          peso_max_kg: Number(batchShelfData.pesoPorPiso),
+          descripcion: batchShelfData.descripcion || `Anaquel ${codigoEstanteClean} - Piso ${i}`
+        });
+      }
+
+      const { data, error } = await supabase
+        .from('estanterias_posiciones')
+        .insert(newPositionsToInsert)
+        .select();
+
+      if (!error && data) {
+        const created: EstanteriaPosicion[] = data.map(p => ({
+          id: p.id,
+          almacenId: p.almacen_id || '',
+          codigoEstante: p.codigo_estante,
+          nivelPiso: p.nivel_piso,
+          codigoPosicion: p.codigo_posicion,
+          zonaTipo: p.zona_tipo || 'ALMACENAJE',
+          capacidadMaxPaquetes: p.capacidad_max_paquetes || 40,
+          pesoMaxKg: Number(p.peso_max_kg || 150),
+          descripcion: p.descripcion || '',
+          creadoEn: p.creado_en || ''
+        }));
+        setPosicionesList(prev => [...prev, ...created]);
+        setIsNewPositionModalOpen(false);
+        setBatchShelfData({
+          almacenCodigo: 'LIN',
+          codigoEstante: '',
+          cantidadPisos: 3,
+          capacidadPorPiso: 40,
+          pesoPorPiso: 150,
+          zonaTipo: 'ALMACENAJE',
+          descripcion: ''
+        });
+      }
+    } catch (err) {
+      console.error('Error creating batch shelf:', err);
+    }
+  };
+
+  // Guardar Edición de Posición / Capacidad
+  const handleUpdatePosition = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingPosition) return;
+    try {
+      await supabase
+        .from('estanterias_posiciones')
+        .update({
+          zona_tipo: editingPosition.zonaTipo,
+          capacidad_max_paquetes: Number(editingPosition.capacidadMaxPaquetes),
+          peso_max_kg: Number(editingPosition.pesoMaxKg),
+          descripcion: editingPosition.descripcion
+        })
+        .eq('id', editingPosition.id);
+
+      setPosicionesList(prev =>
+        prev.map(p => (p.id === editingPosition.id ? editingPosition : p))
+      );
+      setEditingPosition(null);
+    } catch (err) {
+      console.error('Error updating shelf position:', err);
     }
   };
 
@@ -893,7 +1007,8 @@ export default function InventoryTab({
       </div>
 
       {/* Selector de Sub-Pestañas & Accesos Pop-Up */}
-      <div className="wms-subtab-container" style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+      {/* Selector de Sub-Pestañas & Accesos Directos */}
+      <div className="wms-subtab-container" style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
         <button
           onClick={() => setActiveSubTab('existencias')}
           className="wms-subtab-btn"
@@ -901,50 +1016,99 @@ export default function InventoryTab({
             background: activeSubTab === 'existencias' ? '#2563eb' : '#f8fafc',
             color: activeSubTab === 'existencias' ? '#ffffff' : '#475569',
             border: activeSubTab === 'existencias' ? '1px solid #1d4ed8' : '1px solid #e2e8f0',
-            fontWeight: 800
+            fontWeight: 800,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            padding: '8px 14px',
+            borderRadius: '8px',
+            cursor: 'pointer'
           }}
         >
           <Boxes className="w-4 h-4" /> 1. Existencias Lince ({filteredPaquetes.length})
         </button>
 
         <button
-          onClick={() => setIsGestorModalOpen(true)}
+          onClick={() => setActiveSubTab('matriz')}
           className="wms-subtab-btn"
           style={{
-            background: '#ffffff',
-            color: '#1e40af',
-            border: '1px solid #cbd5e1',
-            fontWeight: 700
+            background: activeSubTab === 'matriz' ? '#4338ca' : '#f8fafc',
+            color: activeSubTab === 'matriz' ? '#ffffff' : '#475569',
+            border: activeSubTab === 'matriz' ? '1px solid #3730a3' : '1px solid #e2e8f0',
+            fontWeight: 800,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            padding: '8px 14px',
+            borderRadius: '8px',
+            cursor: 'pointer'
           }}
         >
-          <Settings className="w-4 h-4 text-blue-600" /> ⚙️ Configurar Anaqueles (Pop-up)
+          <Layers className="w-4 h-4" /> 2. 🗺️ Mapa Visual de Anaqueles ({Object.keys(shelfGroups).length} Estantes)
         </button>
 
         <button
-          onClick={() => setIsMatrizModalOpen(true)}
+          onClick={() => setActiveSubTab('gestor')}
           className="wms-subtab-btn"
           style={{
-            background: '#ffffff',
-            color: '#4338ca',
-            border: '1px solid #cbd5e1',
-            fontWeight: 700
+            background: activeSubTab === 'gestor' ? '#1e40af' : '#f8fafc',
+            color: activeSubTab === 'gestor' ? '#ffffff' : '#475569',
+            border: activeSubTab === 'gestor' ? '1px solid #1e3a8a' : '1px solid #e2e8f0',
+            fontWeight: 800,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            padding: '8px 14px',
+            borderRadius: '8px',
+            cursor: 'pointer'
           }}
         >
-          <Layers className="w-4 h-4 text-indigo-600" /> 🗺️ Mapa Visual 3D Slotting (Pop-up)
+          <Settings className="w-4 h-4" /> 3. ⚙️ Configurar Anaqueles & Capacidad ({posicionesList.length})
         </button>
 
         <button
-          onClick={() => setIsKardexModalOpen(true)}
+          onClick={() => setActiveSubTab('movimientos')}
           className="wms-subtab-btn"
           style={{
-            background: '#ffffff',
-            color: '#0f766e',
-            border: '1px solid #cbd5e1',
-            fontWeight: 700
+            background: activeSubTab === 'movimientos' ? '#0f766e' : '#f8fafc',
+            color: activeSubTab === 'movimientos' ? '#ffffff' : '#475569',
+            border: activeSubTab === 'movimientos' ? '1px solid #115e59' : '1px solid #e2e8f0',
+            fontWeight: 800,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            padding: '8px 14px',
+            borderRadius: '8px',
+            cursor: 'pointer'
           }}
         >
-          <Clock className="w-4 h-4 text-teal-600" /> 🔄 Kardex Movimientos ({kardexList.length}) (Pop-up)
+          <Clock className="w-4 h-4" /> 4. 🔄 Kardex Movimientos ({kardexList.length})
         </button>
+
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+          <button
+            onClick={() => {
+              setNewPositionMode('batch');
+              setIsNewPositionModalOpen(true);
+            }}
+            style={{
+              background: '#2563eb',
+              color: '#ffffff',
+              border: 'none',
+              borderRadius: '8px',
+              padding: '8px 14px',
+              fontSize: '12px',
+              fontWeight: 800,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              cursor: 'pointer',
+              boxShadow: '0 2px 4px rgba(37,99,235,0.2)'
+            }}
+          >
+            <Plus className="w-4 h-4" /> + Crear Nuevo Anaquel
+          </button>
+        </div>
       </div>
 
       {/* VISTA 1: EXISTENCIAS Y ALMACÉN */}
@@ -1778,27 +1942,29 @@ export default function InventoryTab({
         </div>
       )}
 
-      {/* VISTA 3: MATRIZ VISUAL DE ANAQUELES (SLOTTING DINÁMICO 2D) */}
+      {/* VISTA 2: MAPA VISUAL DE ANAQUELES (SLOTTING 3D / RACK GRID) */}
       {activeSubTab === 'matriz' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          {/* Header & KPI Summary */}
           <div
             style={{
               background: '#ffffff',
               border: '1px solid #e2e8f0',
-              borderRadius: '12px',
-              padding: '16px',
+              borderRadius: '14px',
+              padding: '16px 20px',
               display: 'flex',
               justifyContent: 'space-between',
               alignItems: 'center',
               flexWrap: 'wrap',
-              gap: '10px'
+              gap: '12px',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.04)'
             }}
           >
             <div>
               <h3
                 style={{
                   margin: 0,
-                  fontSize: '15px',
+                  fontSize: '16px',
                   fontWeight: 800,
                   color: '#0f172a',
                   display: 'flex',
@@ -1806,147 +1972,374 @@ export default function InventoryTab({
                   gap: '8px'
                 }}
               >
-                <Layers className="w-5 h-5 text-indigo-600" /> Mapa Físico del Almacén Sede Lince & Distribución de Anaqueles
+                <Layers className="w-5 h-5 text-indigo-600" /> Mapa Visual de Anaqueles & Slotting (Almacén Lince)
               </h3>
               <p style={{ margin: '4px 0 0 0', fontSize: '12px', color: '#64748b' }}>
-                Slotting en vivo con mapa de calor y control de capacidad por estante y nivel
+                Vista gráfica interactiva de estantes físicos, niveles de piso, capacidad en tiempo real y paquetes almacenados
               </p>
             </div>
 
-            <button
-              onClick={() => setIsNewPositionModalOpen(true)}
-              className="btn btn-primary"
-              style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12.5px', fontWeight: 700 }}
-            >
-              <Plus className="w-4 h-4" /> Agregar Nuevo Anaquel / Nivel
-            </button>
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+              <button
+                onClick={() => {
+                  setNewPositionMode('batch');
+                  setIsNewPositionModalOpen(true);
+                }}
+                className="btn btn-primary"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  fontSize: '12.5px',
+                  fontWeight: 800,
+                  padding: '8px 14px',
+                  borderRadius: '8px'
+                }}
+              >
+                <Plus className="w-4 h-4" /> + Crear Nuevo Anaquel (Lote)
+              </button>
+            </div>
           </div>
 
-          {/* Grilla dinámica de Anaqueles */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '16px' }}>
-            {Object.entries(shelfGroups).map(([shelfCode, positions]) => {
-              const totalInShelf = paquetes.filter(
-                p =>
-                  p.anaquel === shelfCode ||
-                  (p.posicionEstante && p.posicionEstante.startsWith(shelfCode))
-              ).length;
+          {/* Barra de Filtros y Búsqueda en el Mapa */}
+          <div
+            style={{
+              background: '#ffffff',
+              border: '1px solid #e2e8f0',
+              borderRadius: '12px',
+              padding: '12px 16px',
+              display: 'flex',
+              gap: '12px',
+              flexWrap: 'wrap',
+              alignItems: 'center',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.03)'
+            }}
+          >
+            <div style={{ position: 'relative', flex: '1 1 240px' }}>
+              <Search
+                style={{
+                  position: 'absolute',
+                  left: '10px',
+                  top: '9px',
+                  width: '15px',
+                  height: '15px',
+                  color: '#94a3b8'
+                }}
+              />
+              <input
+                type="text"
+                placeholder="Buscar por Anaquel (A1, A2...), Piso (P1, P2) o Guía WR..."
+                value={shelfSearchTerm}
+                onChange={e => setShelfSearchTerm(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '6px 10px 6px 32px',
+                  borderRadius: '6px',
+                  border: '1px solid #cbd5e1',
+                  fontSize: '12.5px',
+                  outline: 'none'
+                }}
+              />
+            </div>
 
-              const isSpecialZone = shelfCode === 'REC' || shelfCode === 'DSP';
-              const borderColor =
-                shelfCode === 'A1'
-                  ? '#3b82f6'
-                  : shelfCode === 'A2'
-                  ? '#16a34a'
-                  : isSpecialZone
-                  ? '#f59e0b'
-                  : '#8b5cf6';
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span style={{ fontSize: '12px', fontWeight: 800, color: '#475569' }}>Zona:</span>
+              <select
+                value={shelfZoneFilter}
+                onChange={e => setShelfZoneFilter(e.target.value)}
+                style={{
+                  padding: '5px 8px',
+                  borderRadius: '6px',
+                  border: '1px solid #cbd5e1',
+                  fontSize: '12px',
+                  background: '#ffffff',
+                  fontWeight: 600
+                }}
+              >
+                <option value="ALL">Todas las Zonas</option>
+                <option value="ALMACENAJE">📦 Almacenaje</option>
+                <option value="RECEPCION">📥 Recepción (REC)</option>
+                <option value="DESPACHO">🚚 Despacho (DSP)</option>
+                <option value="DEVOLUCION">⚠️ Devoluciones</option>
+              </select>
+            </div>
 
-              return (
-                <div
-                  key={shelfCode}
-                  style={{
-                    background: '#ffffff',
-                    border: `2px solid ${borderColor}`,
-                    borderRadius: '14px',
-                    padding: '16px',
-                    boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
-                  }}
-                >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span style={{ fontSize: '12px', fontWeight: 800, color: '#475569' }}>Ocupación:</span>
+              <select
+                value={shelfOccupancyFilter}
+                onChange={e => setShelfOccupancyFilter(e.target.value)}
+                style={{
+                  padding: '5px 8px',
+                  borderRadius: '6px',
+                  border: '1px solid #cbd5e1',
+                  fontSize: '12px',
+                  background: '#ffffff',
+                  fontWeight: 600
+                }}
+              >
+                <option value="ALL">Todos los Estados</option>
+                <option value="DISPONIBLE">🟢 Disponible (&lt; 70%)</option>
+                <option value="CASI_LLENO">🟡 Casi Lleno (70% - 90%)</option>
+                <option value="LLENO">🔴 Lleno (&gt; 90%)</option>
+              </select>
+            </div>
+
+            {(shelfSearchTerm || shelfZoneFilter !== 'ALL' || shelfOccupancyFilter !== 'ALL') && (
+              <button
+                onClick={() => {
+                  setShelfSearchTerm('');
+                  setShelfZoneFilter('ALL');
+                  setShelfOccupancyFilter('ALL');
+                }}
+                style={{
+                  background: '#fee2e2',
+                  border: '1px solid #fca5a5',
+                  color: '#dc2626',
+                  padding: '4px 10px',
+                  borderRadius: '6px',
+                  fontSize: '12px',
+                  fontWeight: 800,
+                  cursor: 'pointer'
+                }}
+              >
+                ✕ Limpiar Filtros
+              </button>
+            )}
+          </div>
+
+          {/* Grilla Visual de Estanterías Físicas */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '18px' }}>
+            {Object.entries(shelfGroups)
+              .filter(([shelfCode, positions]) => {
+                if (shelfSearchTerm) {
+                  const term = shelfSearchTerm.toLowerCase();
+                  const matchesCode = shelfCode.toLowerCase().includes(term);
+                  const matchesPos = positions.some(p => p.codigoPosicion.toLowerCase().includes(term));
+                  const matchesPkg = paquetes.some(
+                    p =>
+                      (p.posicionEstante && p.posicionEstante.startsWith(shelfCode) && p.numeroReciboBodega.toLowerCase().includes(term))
+                  );
+                  if (!matchesCode && !matchesPos && !matchesPkg) return false;
+                }
+                if (shelfZoneFilter !== 'ALL') {
+                  const hasZone = positions.some(p => p.zonaTipo === shelfZoneFilter);
+                  if (!hasZone) return false;
+                }
+                return true;
+              })
+              .map(([shelfCode, positions]) => {
+                const totalInShelf = paquetes.filter(
+                  p =>
+                    p.anaquel === shelfCode ||
+                    (p.posicionEstante && p.posicionEstante.startsWith(shelfCode))
+                ).length;
+
+                const totalWeightInShelf = paquetes
+                  .filter(
+                    p =>
+                      p.anaquel === shelfCode ||
+                      (p.posicionEstante && p.posicionEstante.startsWith(shelfCode))
+                  )
+                  .reduce((sum, p) => sum + (Number(p.pesoKg) || 0), 0);
+
+                const isSpecialZone = shelfCode === 'REC' || shelfCode === 'DSP';
+                const borderColor =
+                  shelfCode === 'A1'
+                    ? '#3b82f6'
+                    : shelfCode === 'A2'
+                    ? '#10b981'
+                    : shelfCode === 'A3'
+                    ? '#8b5cf6'
+                    : isSpecialZone
+                    ? '#f59e0b'
+                    : '#0284c7';
+
+                return (
                   <div
+                    key={shelfCode}
                     style={{
+                      background: '#ffffff',
+                      border: `2px solid ${borderColor}`,
+                      borderRadius: '14px',
+                      overflow: 'hidden',
+                      boxShadow: '0 4px 12px rgba(0,0,0,0.05)',
                       display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      marginBottom: '14px',
-                      borderBottom: '1px solid #e2e8f0',
-                      paddingBottom: '10px'
+                      flexDirection: 'column'
                     }}
                   >
-                    <span
+                    {/* Cabecera del Anaquel */}
+                    <div
                       style={{
-                        fontSize: '14px',
-                        fontWeight: 800,
-                        color: '#0f172a',
+                        background: isSpecialZone ? '#fffbeb' : '#f8fafc',
+                        padding: '12px 16px',
+                        borderBottom: '1px solid #e2e8f0',
                         display: 'flex',
+                        justifyContent: 'space-between',
                         alignItems: 'center',
-                        gap: '6px'
+                        flexWrap: 'wrap',
+                        gap: '8px'
                       }}
                     >
-                      <Layers className="w-4 h-4 text-blue-600" />{' '}
-                      {isSpecialZone
-                        ? shelfCode === 'REC'
-                          ? 'Mesa de Recepción (REC)'
-                          : 'Zona de Despacho (DSP)'
-                        : `ANAQUEL ${shelfCode}`}
-                    </span>
-                    <span
-                      style={{
-                        fontSize: '12px',
-                        fontWeight: 800,
-                        background: '#eff6ff',
-                        color: '#1e40af',
-                        padding: '2px 8px',
-                        borderRadius: '6px'
-                      }}
-                    >
-                      {totalInShelf} paquetes
-                    </span>
-                  </div>
-
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                    {positions.map(posItem => {
-                      const posCode = posItem.codigoPosicion;
-                      const pkgsInFloor = paquetes.filter(
-                        p =>
-                          p.posicionEstante === posCode ||
-                          (p.anaquel === shelfCode && p.piso === posItem.nivelPiso)
-                      );
-                      const maxCap = posItem.capacidadMaxPaquetes || 40;
-                      const percent = Math.min(Math.round((pkgsInFloor.length / maxCap) * 100), 100);
-
-                      const floorLabel =
-                        posItem.nivelPiso === 'P3'
-                          ? 'Piso 3 (Superior)'
-                          : posItem.nivelPiso === 'P2'
-                          ? 'Piso 2 (Medio)'
-                          : posItem.nivelPiso === 'P1'
-                          ? 'Piso 1 (Inferior)'
-                          : `Nivel ${posItem.nivelPiso}`;
-
-                      return (
-                        <div
-                          key={posItem.id}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span
                           style={{
-                            background: '#f8fafc',
-                            border: '1px solid #e2e8f0',
-                            borderRadius: '10px',
-                            padding: '12px',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            gap: '6px'
+                            background: borderColor,
+                            color: '#ffffff',
+                            fontWeight: 900,
+                            fontSize: '13px',
+                            padding: '3px 8px',
+                            borderRadius: '6px',
+                            fontFamily: 'monospace'
                           }}
                         >
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <span style={{ fontSize: '12px', fontWeight: 800, color: '#0f172a' }}>
-                              {isSpecialZone ? posItem.descripcion || posCode : floorLabel}
-                            </span>
-                            <span
-                              style={{
-                                fontSize: '11px',
-                                fontWeight: 800,
-                                color: '#2563eb',
-                                fontFamily: 'monospace'
-                              }}
-                            >
-                              {posCode}
-                            </span>
+                          {shelfCode}
+                        </span>
+                        <div>
+                          <span style={{ fontSize: '13.5px', fontWeight: 800, color: '#0f172a' }}>
+                            {isSpecialZone
+                              ? shelfCode === 'REC'
+                                ? 'Mesa de Recepción & Ingreso'
+                                : 'Zona de Despacho & Salida'
+                              : `Anaquel ${shelfCode}`}
+                          </span>
+                          <div style={{ fontSize: '11px', color: '#64748b' }}>
+                            {positions.length} niveles configurados • {totalWeightInShelf.toFixed(1)} kg totales
                           </div>
+                        </div>
+                      </div>
 
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span
+                          style={{
+                            fontSize: '11.5px',
+                            fontWeight: 800,
+                            background: '#eff6ff',
+                            color: '#1d4ed8',
+                            padding: '3px 8px',
+                            borderRadius: '6px'
+                          }}
+                        >
+                          {totalInShelf} bultos
+                        </span>
+
+                        <button
+                          title={`Filtrar existencias del Anaquel ${shelfCode}`}
+                          onClick={() => {
+                            setShelfFilter(shelfCode);
+                            setActiveSubTab('existencias');
+                          }}
+                          style={{
+                            background: '#ffffff',
+                            border: '1px solid #cbd5e1',
+                            padding: '3px 6px',
+                            borderRadius: '6px',
+                            fontSize: '11px',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            color: '#334155'
+                          }}
+                        >
+                          🔍 Filtrar
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Niveles / Pisos del Anaquel */}
+                    <div style={{ padding: '14px', display: 'flex', flexDirection: 'column', gap: '10px', flex: 1 }}>
+                      {positions.map(posItem => {
+                        const posCode = posItem.codigoPosicion;
+                        const pkgsInFloor = paquetes.filter(
+                          p =>
+                            p.posicionEstante === posCode ||
+                            (p.anaquel === shelfCode && p.piso === posItem.nivelPiso)
+                        );
+                        const maxCap = posItem.capacidadMaxPaquetes || 40;
+                        const percent = Math.min(Math.round((pkgsInFloor.length / maxCap) * 100), 100);
+
+                        const floorLabel =
+                          posItem.nivelPiso === 'P3'
+                            ? 'Piso 3 (Superior)'
+                            : posItem.nivelPiso === 'P2'
+                            ? 'Piso 2 (Medio)'
+                            : posItem.nivelPiso === 'P1'
+                            ? 'Piso 1 (Inferior)'
+                            : `Nivel ${posItem.nivelPiso}`;
+
+                        const barColor =
+                          percent > 85 ? '#ef4444' : percent > 60 ? '#f59e0b' : '#10b981';
+
+                        return (
+                          <div
+                            key={posItem.id}
+                            style={{
+                              background: '#f8fafc',
+                              border: '1px solid #e2e8f0',
+                              borderRadius: '10px',
+                              padding: '10px 12px',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: '6px'
+                            }}
+                          >
+                            {/* Cabecera del Piso */}
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <span
+                                  style={{
+                                    fontFamily: 'monospace',
+                                    fontWeight: 900,
+                                    fontSize: '11.5px',
+                                    padding: '2px 6px',
+                                    borderRadius: '4px',
+                                    background: '#eff6ff',
+                                    color: '#1d4ed8',
+                                    border: '1px solid #bfdbfe'
+                                  }}
+                                >
+                                  {posCode}
+                                </span>
+                                <span style={{ fontSize: '12px', fontWeight: 700, color: '#334155' }}>
+                                  {isSpecialZone ? posItem.descripcion || posCode : floorLabel}
+                                </span>
+                              </div>
+
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <button
+                                  title="Editar capacidad / peso de este piso"
+                                  onClick={() => setEditingPosition(posItem)}
+                                  style={{
+                                    background: '#ffffff',
+                                    border: '1px solid #cbd5e1',
+                                    width: '24px',
+                                    height: '24px',
+                                    borderRadius: '4px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    cursor: 'pointer',
+                                    color: '#475569'
+                                  }}
+                                >
+                                  <Edit3 className="w-3 h-3" />
+                                </button>
+
+                                <span
+                                  style={{
+                                    fontSize: '11px',
+                                    fontWeight: 800,
+                                    color: barColor
+                                  }}
+                                >
+                                  {pkgsInFloor.length} / {maxCap} ({percent}%)
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Barra de Ocupación Visual */}
                             <div
                               style={{
-                                flex: 1,
-                                height: '8px',
+                                height: '7px',
                                 background: '#e2e8f0',
                                 borderRadius: '999px',
                                 overflow: 'hidden'
@@ -1956,96 +2349,95 @@ export default function InventoryTab({
                                 style={{
                                   width: `${percent}%`,
                                   height: '100%',
-                                  background: percent > 85 ? '#ef4444' : percent > 60 ? '#f59e0b' : '#22c55e',
+                                  background: barColor,
                                   borderRadius: '999px',
                                   transition: 'width 0.3s ease'
                                 }}
                               />
                             </div>
-                            <span
-                              style={{
-                                fontSize: '11px',
-                                fontWeight: 800,
-                                color: '#475569',
-                                minWidth: '70px',
-                                textAlign: 'right'
-                              }}
-                            >
-                              {pkgsInFloor.length} / {maxCap} ({percent}%)
-                            </span>
-                          </div>
 
-                          {pkgsInFloor.length > 0 && (
-                            <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginTop: '4px' }}>
-                              {pkgsInFloor.slice(0, 6).map(p => (
-                                <span
-                                  key={p.id}
-                                  onClick={() => openTransferModal(p)}
-                                  title={`Clic para reubicar: ${p.numeroReciboBodega} (${p.nombreConsignatario || p.codigoCasillero})`}
-                                  style={{
-                                    fontSize: '10px',
-                                    fontWeight: 800,
-                                    fontFamily: 'monospace',
-                                    background: '#ffffff',
-                                    border: '1px solid #cbd5e1',
-                                    padding: '2px 6px',
-                                    borderRadius: '4px',
-                                    color: '#334155',
-                                    cursor: 'pointer'
-                                  }}
-                                >
-                                  {p.numeroReciboBodega}
-                                </span>
-                              ))}
-                              {pkgsInFloor.length > 6 && (
-                                <span
-                                  onClick={() => setInspectingPosition(posCode)}
-                                  style={{
-                                    fontSize: '10px',
-                                    color: '#2563eb',
-                                    fontWeight: 800,
-                                    alignSelf: 'center',
-                                    cursor: 'pointer',
-                                    textDecoration: 'underline'
-                                  }}
-                                >
-                                  +{pkgsInFloor.length - 6} más (Ver todos)
-                                </span>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
+                            {/* Chips de Paquetes en el Piso */}
+                            {pkgsInFloor.length > 0 ? (
+                              <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginTop: '2px' }}>
+                                {pkgsInFloor.slice(0, 5).map(p => (
+                                  <span
+                                    key={p.id}
+                                    onClick={() => openTransferModal(p)}
+                                    title={`Clic para reubicar: ${p.numeroReciboBodega} (${p.nombreConsignatario || p.codigoCasillero})`}
+                                    style={{
+                                      fontSize: '10px',
+                                      fontWeight: 800,
+                                      fontFamily: 'monospace',
+                                      background: '#ffffff',
+                                      border: '1px solid #cbd5e1',
+                                      padding: '2px 5px',
+                                      borderRadius: '4px',
+                                      color: '#1e293b',
+                                      cursor: 'pointer'
+                                    }}
+                                  >
+                                    📦 {p.numeroReciboBodega}
+                                  </span>
+                                ))}
+                                {pkgsInFloor.length > 5 && (
+                                  <span
+                                    onClick={() => {
+                                      setShelfFilter(shelfCode);
+                                      setFloorFilter(posItem.nivelPiso);
+                                      setActiveSubTab('existencias');
+                                    }}
+                                    style={{
+                                      fontSize: '10px',
+                                      color: '#2563eb',
+                                      fontWeight: 800,
+                                      alignSelf: 'center',
+                                      cursor: 'pointer',
+                                      textDecoration: 'underline'
+                                    }}
+                                  >
+                                    +{pkgsInFloor.length - 5} más (Ver todos)
+                                  </span>
+                                )}
+                              </div>
+                            ) : (
+                              <div style={{ fontSize: '10.5px', color: '#94a3b8', fontStyle: 'italic' }}>
+                                Piso vacío • Listo para almacenar carga
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })}
           </div>
         </div>
       )}
 
-      {/* VISTA 4: CONFIGURACIÓN Y GESTOR DE ANAQUELES */}
+      {/* VISTA 3: CONFIGURAR ANAQUELES & CAPACIDADES WMS */}
       {activeSubTab === 'gestor' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          {/* Header & KPI Cards */}
           <div
             style={{
               background: '#ffffff',
               border: '1px solid #e2e8f0',
-              borderRadius: '12px',
-              padding: '16px',
+              borderRadius: '14px',
+              padding: '16px 20px',
               display: 'flex',
               justifyContent: 'space-between',
               alignItems: 'center',
               flexWrap: 'wrap',
-              gap: '10px'
+              gap: '12px',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.04)'
             }}
           >
             <div>
               <h3
                 style={{
                   margin: 0,
-                  fontSize: '15px',
+                  fontSize: '16px',
                   fontWeight: 800,
                   color: '#0f172a',
                   display: 'flex',
@@ -2053,105 +2445,253 @@ export default function InventoryTab({
                   gap: '8px'
                 }}
               >
-                <Settings className="w-5 h-5 text-indigo-600" /> Gestor Dinámico de Estanterías y Parámetros WMS
+                <Settings className="w-5 h-5 text-indigo-600" /> Configuración de Anaqueles, Pisos y Parámetros WMS
               </h3>
               <p style={{ margin: '4px 0 0 0', fontSize: '12px', color: '#64748b' }}>
-                Administra los anaqueles físicos, niveles de piso, límites de peso y zonas de operación
+                Administra los anaqueles físicos, niveles de piso, límites de peso y zonas de operación en el Almacén Central Lince
               </p>
             </div>
 
-            <button
-              onClick={() => setIsNewPositionModalOpen(true)}
-              className="btn btn-primary"
-              style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12.5px', fontWeight: 700 }}
-            >
-              <Plus className="w-4 h-4" /> Agregar Nueva Posición
-            </button>
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+              <button
+                onClick={() => {
+                  setNewPositionMode('batch');
+                  setIsNewPositionModalOpen(true);
+                }}
+                className="btn btn-primary"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  fontSize: '12.5px',
+                  fontWeight: 800,
+                  padding: '8px 14px',
+                  borderRadius: '8px'
+                }}
+              >
+                <Plus className="w-4 h-4" /> + Crear Anaquel en Lote
+              </button>
+
+              <button
+                onClick={() => {
+                  setNewPositionMode('single');
+                  setIsNewPositionModalOpen(true);
+                }}
+                className="btn"
+                style={{
+                  background: '#f8fafc',
+                  border: '1px solid #cbd5e1',
+                  color: '#334155',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  fontSize: '12.5px',
+                  fontWeight: 700,
+                  padding: '8px 14px',
+                  borderRadius: '8px'
+                }}
+              >
+                <Plus className="w-4 h-4" /> + Posición Individual
+              </button>
+            </div>
           </div>
 
-          <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '12px', overflow: 'hidden' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12.5px', textAlign: 'left' }}>
-              <thead>
-                <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', color: '#475569', fontWeight: 800 }}>
-                  <th style={{ padding: '10px 14px' }}>Código Posición</th>
-                  <th style={{ padding: '10px 14px' }}>Anaquel</th>
-                  <th style={{ padding: '10px 14px' }}>Nivel / Piso</th>
-                  <th style={{ padding: '10px 14px' }}>Tipo de Zona</th>
-                  <th style={{ padding: '10px 14px' }}>Capacidad Paquetes</th>
-                  <th style={{ padding: '10px 14px' }}>Límite Peso (Kg)</th>
-                  <th style={{ padding: '10px 14px' }}>Descripción</th>
-                  <th style={{ padding: '10px 14px', textAlign: 'center' }}>Acción</th>
-                </tr>
-              </thead>
-              <tbody>
-                {posicionesList.map(pos => (
-                  <tr key={pos.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                    <td style={{ padding: '10px 14px', fontWeight: 800, fontFamily: 'monospace', color: '#2563eb' }}>
-                      {pos.codigoPosicion}
-                    </td>
-                    <td style={{ padding: '10px 14px', fontWeight: 700, color: '#0f172a' }}>
-                      {pos.codigoEstante}
-                    </td>
-                    <td style={{ padding: '10px 14px', color: '#334155' }}>
-                      {pos.nivelPiso}
-                    </td>
-                    <td style={{ padding: '10px 14px' }}>
-                      <span
-                        style={{
-                          fontSize: '10.5px',
-                          fontWeight: 800,
-                          padding: '2px 6px',
-                          borderRadius: '4px',
-                          background:
-                            pos.zonaTipo === 'ALMACENAJE'
-                              ? '#dbeafe'
-                              : pos.zonaTipo === 'RECEPCION'
-                              ? '#fef3c7'
-                              : '#dcfce7',
-                          color:
-                            pos.zonaTipo === 'ALMACENAJE'
-                              ? '#1e40af'
-                              : pos.zonaTipo === 'RECEPCION'
-                              ? '#92400e'
-                              : '#166534'
-                        }}
-                      >
-                        {pos.zonaTipo}
-                      </span>
-                    </td>
-                    <td style={{ padding: '10px 14px', fontWeight: 700, color: '#0f172a' }}>
-                      {pos.capacidadMaxPaquetes} bultos
-                    </td>
-                    <td style={{ padding: '10px 14px', color: '#64748b' }}>
-                      {pos.pesoMaxKg} Kg
-                    </td>
-                    <td style={{ padding: '10px 14px', color: '#64748b' }}>
-                      {pos.descripcion || '-'}
-                    </td>
-                    <td style={{ padding: '10px 14px', textAlign: 'center' }}>
-                      <button
-                        title="Eliminar Posición"
-                        onClick={() => handleDeletePosition(pos.id)}
-                        style={{
-                          background: '#fef2f2',
-                          border: '1px solid #fecaca',
-                          color: '#dc2626',
-                          width: '28px',
-                          height: '28px',
-                          borderRadius: '6px',
-                          cursor: 'pointer',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          justifyContent: 'center'
-                        }}
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </td>
+          {/* Tabla de Configuración de Posiciones */}
+          <div
+            style={{
+              background: '#ffffff',
+              border: '1px solid #e2e8f0',
+              borderRadius: '12px',
+              overflow: 'hidden',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.04)'
+            }}
+          >
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12.5px', textAlign: 'left' }}>
+                <thead>
+                  <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', color: '#475569', fontWeight: 800 }}>
+                    <th style={{ padding: '10px 14px' }}>Código Posición</th>
+                    <th style={{ padding: '10px 14px' }}>Anaquel</th>
+                    <th style={{ padding: '10px 14px' }}>Nivel / Piso</th>
+                    <th style={{ padding: '10px 14px' }}>Tipo de Zona</th>
+                    <th style={{ padding: '10px 14px' }}>Ocupación / Capacidad</th>
+                    <th style={{ padding: '10px 14px' }}>Límite Peso (Kg)</th>
+                    <th style={{ padding: '10px 14px' }}>Descripción / Ubicación</th>
+                    <th style={{ padding: '10px 14px', textAlign: 'center' }}>Acciones</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {posicionesList.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} style={{ textAlign: 'center', padding: '36px', color: '#94a3b8' }}>
+                        <Settings style={{ width: '40px', height: '40px', margin: '0 auto 8px auto', color: '#cbd5e1' }} />
+                        <div style={{ fontWeight: 800, color: '#64748b' }}>No hay posiciones de estantería configuradas</div>
+                        <p style={{ margin: '4px 0 0 0', fontSize: '12px' }}>Haz clic en "+ Crear Anaquel en Lote" para comenzar.</p>
+                      </td>
+                    </tr>
+                  ) : (
+                    posicionesList.map(pos => {
+                      const countInPos = paquetes.filter(
+                        p =>
+                          p.posicionEstante === pos.codigoPosicion ||
+                          (p.anaquel === pos.codigoEstante && p.piso === pos.nivelPiso)
+                      ).length;
+                      const maxCap = pos.capacidadMaxPaquetes || 40;
+                      const pct = Math.min(Math.round((countInPos / maxCap) * 100), 100);
+
+                      return (
+                        <tr key={pos.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                          <td style={{ padding: '10px 14px' }}>
+                            <span
+                              style={{
+                                fontFamily: 'monospace',
+                                fontWeight: 900,
+                                fontSize: '13px',
+                                color: '#2563eb',
+                                background: '#eff6ff',
+                                padding: '3px 8px',
+                                borderRadius: '6px',
+                                border: '1px solid #bfdbfe'
+                              }}
+                            >
+                              {pos.codigoPosicion}
+                            </span>
+                          </td>
+                          <td style={{ padding: '10px 14px', fontWeight: 800, color: '#0f172a' }}>
+                            Anaquel {pos.codigoEstante}
+                          </td>
+                          <td style={{ padding: '10px 14px', color: '#334155', fontWeight: 700 }}>
+                            {pos.nivelPiso}
+                          </td>
+                          <td style={{ padding: '10px 14px' }}>
+                            <span
+                              style={{
+                                fontSize: '11px',
+                                fontWeight: 800,
+                                padding: '3px 8px',
+                                borderRadius: '6px',
+                                background:
+                                  pos.zonaTipo === 'ALMACENAJE'
+                                    ? '#dbeafe'
+                                    : pos.zonaTipo === 'RECEPCION'
+                                    ? '#fef3c7'
+                                    : pos.zonaTipo === 'DESPACHO'
+                                    ? '#dcfce7'
+                                    : '#fee2e2',
+                                color:
+                                  pos.zonaTipo === 'ALMACENAJE'
+                                    ? '#1e40af'
+                                    : pos.zonaTipo === 'RECEPCION'
+                                    ? '#92400e'
+                                    : pos.zonaTipo === 'DESPACHO'
+                                    ? '#166534'
+                                    : '#dc2626'
+                              }}
+                            >
+                              {pos.zonaTipo}
+                            </span>
+                          </td>
+                          <td style={{ padding: '10px 14px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <div
+                                style={{
+                                  width: '70px',
+                                  height: '6px',
+                                  background: '#e2e8f0',
+                                  borderRadius: '999px',
+                                  overflow: 'hidden'
+                                }}
+                              >
+                                <div
+                                  style={{
+                                    width: `${pct}%`,
+                                    height: '100%',
+                                    background: pct > 85 ? '#ef4444' : pct > 60 ? '#f59e0b' : '#10b981'
+                                  }}
+                                />
+                              </div>
+                              <span style={{ fontSize: '11.5px', fontWeight: 800, color: '#0f172a' }}>
+                                {countInPos} / {maxCap} ({pct}%)
+                              </span>
+                            </div>
+                          </td>
+                          <td style={{ padding: '10px 14px', color: '#64748b', fontWeight: 600 }}>
+                            {pos.pesoMaxKg} Kg
+                          </td>
+                          <td style={{ padding: '10px 14px', color: '#64748b' }}>
+                            {pos.descripcion || 'Sin descripción'}
+                          </td>
+                          <td style={{ padding: '10px 14px', textAlign: 'center' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                              <button
+                                title="Editar Posición / Capacidad"
+                                onClick={() => setEditingPosition(pos)}
+                                style={{
+                                  background: '#eff6ff',
+                                  border: '1px solid #bfdbfe',
+                                  color: '#2563eb',
+                                  width: '28px',
+                                  height: '28px',
+                                  borderRadius: '6px',
+                                  cursor: 'pointer',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center'
+                                }}
+                              >
+                                <Edit3 className="w-3.5 h-3.5" />
+                              </button>
+
+                              <button
+                                title="Filtrar existencias en este anaquel"
+                                onClick={() => {
+                                  setShelfFilter(pos.codigoEstante);
+                                  setFloorFilter(pos.nivelPiso);
+                                  setActiveSubTab('existencias');
+                                }}
+                                style={{
+                                  background: '#f8fafc',
+                                  border: '1px solid #cbd5e1',
+                                  color: '#334155',
+                                  width: '28px',
+                                  height: '28px',
+                                  borderRadius: '6px',
+                                  cursor: 'pointer',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center'
+                                }}
+                              >
+                                <Boxes className="w-3.5 h-3.5" />
+                              </button>
+
+                              <button
+                                title="Eliminar Posición"
+                                onClick={() => handleDeletePosition(pos.id)}
+                                style={{
+                                  background: '#fee2e2',
+                                  border: '1px solid #fca5a5',
+                                  color: '#dc2626',
+                                  width: '28px',
+                                  height: '28px',
+                                  borderRadius: '6px',
+                                  cursor: 'pointer',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center'
+                                }}
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}
@@ -2276,13 +2816,13 @@ export default function InventoryTab({
         </div>
       )}
 
-      {/* MODAL DE NUEVA POSICIÓN / ANAQUEL WMS */}
+      {/* MODAL DE NUEVA POSICIÓN / CREAR ANAQUEL WMS */}
       {isNewPositionModalOpen && (
         <div className="modal-backdrop">
-          <div className="modal-dialog" style={{ maxWidth: '480px' }}>
+          <div className="modal-dialog" style={{ maxWidth: '540px', maxHeight: '92vh', overflowY: 'auto' }}>
             <div className="modal-header">
               <span className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Plus className="w-5 h-5 text-blue-600" /> Crear Nueva Posición de Anaquel
+                <Plus className="w-5 h-5 text-blue-600" /> Crear & Configurar Anaquel WMS
               </span>
               <button
                 onClick={() => setIsNewPositionModalOpen(false)}
@@ -2292,62 +2832,355 @@ export default function InventoryTab({
               </button>
             </div>
 
-            <form onSubmit={handleCreatePosition} className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <div className="wms-modal-grid-2">
-                <div className="form-group">
-                  <label style={{ fontSize: '12px', fontWeight: 800, color: '#334155' }}>Almacén Sede</label>
-                  <select
-                    value={newPositionData.almacenCodigo}
-                    onChange={e => setNewPositionData({ ...newPositionData, almacenCodigo: e.target.value })}
-                    className="form-control"
-                  >
-                    <option value="LIN">Sede Central Lince</option>
-                    <option value="MIA">Miami Hub (USA)</option>
-                    <option value="TGO">Tingo María</option>
-                  </select>
+            {/* Selector de Modo: Lote vs Individual */}
+            <div style={{ padding: '12px 20px 0 20px', display: 'flex', gap: '8px' }}>
+              <button
+                type="button"
+                onClick={() => setNewPositionMode('batch')}
+                style={{
+                  flex: 1,
+                  padding: '8px',
+                  borderRadius: '8px',
+                  border: newPositionMode === 'batch' ? '2px solid #2563eb' : '1px solid #cbd5e1',
+                  background: newPositionMode === 'batch' ? '#eff6ff' : '#ffffff',
+                  color: newPositionMode === 'batch' ? '#1d4ed8' : '#64748b',
+                  fontWeight: 800,
+                  fontSize: '12px',
+                  cursor: 'pointer'
+                }}
+              >
+                ⚡ Anaquel Completo (Lote)
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setNewPositionMode('single')}
+                style={{
+                  flex: 1,
+                  padding: '8px',
+                  borderRadius: '8px',
+                  border: newPositionMode === 'single' ? '2px solid #2563eb' : '1px solid #cbd5e1',
+                  background: newPositionMode === 'single' ? '#eff6ff' : '#ffffff',
+                  color: newPositionMode === 'single' ? '#1d4ed8' : '#64748b',
+                  fontWeight: 800,
+                  fontSize: '12px',
+                  cursor: 'pointer'
+                }}
+              >
+                🛠️ Posición Individual
+              </button>
+            </div>
+
+            {/* MODO 1: CREAR EN LOTE */}
+            {newPositionMode === 'batch' ? (
+              <form onSubmit={handleCreateBatchShelf} className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '14px', padding: '16px 20px' }}>
+                <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '8px', padding: '10px 12px', fontSize: '12px', color: '#166534' }}>
+                  💡 <b>Creación Rápida:</b> Genera automáticamente todos los pisos (P1, P2, P3...) con sus límites de capacidad para el nuevo anaquel en un solo paso.
+                </div>
+
+                <div className="wms-modal-grid-2">
+                  <div className="form-group">
+                    <label style={{ fontSize: '12px', fontWeight: 800, color: '#334155' }}>Código de Anaquel</label>
+                    <input
+                      type="text"
+                      placeholder="Ej: A3, B1, C2"
+                      value={batchShelfData.codigoEstante}
+                      onChange={e => setBatchShelfData({ ...batchShelfData, codigoEstante: e.target.value.toUpperCase() })}
+                      className="form-control"
+                      style={{ fontWeight: 800, fontFamily: 'monospace' }}
+                      required
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label style={{ fontSize: '12px', fontWeight: 800, color: '#334155' }}>Cantidad de Pisos / Niveles</label>
+                    <select
+                      value={batchShelfData.cantidadPisos}
+                      onChange={e => setBatchShelfData({ ...batchShelfData, cantidadPisos: Number(e.target.value) })}
+                      className="form-control"
+                      style={{ fontWeight: 700 }}
+                    >
+                      <option value={1}>1 Nivel (Solo P1)</option>
+                      <option value={2}>2 Niveles (P1, P2)</option>
+                      <option value={3}>3 Niveles (P1, P2, P3)</option>
+                      <option value={4}>4 Niveles (P1, P2, P3, P4)</option>
+                      <option value={5}>5 Niveles (P1 a P5)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="wms-modal-grid-2">
+                  <div className="form-group">
+                    <label style={{ fontSize: '12px', fontWeight: 800, color: '#334155' }}>Capacidad por Piso (Bultos)</label>
+                    <input
+                      type="number"
+                      value={batchShelfData.capacidadPorPiso}
+                      onChange={e => setBatchShelfData({ ...batchShelfData, capacidadPorPiso: Number(e.target.value) })}
+                      className="form-control"
+                      required
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label style={{ fontSize: '12px', fontWeight: 800, color: '#334155' }}>Peso Máx. por Piso (Kg)</label>
+                    <input
+                      type="number"
+                      value={batchShelfData.pesoPorPiso}
+                      onChange={e => setBatchShelfData({ ...batchShelfData, pesoPorPiso: Number(e.target.value) })}
+                      className="form-control"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="wms-modal-grid-2">
+                  <div className="form-group">
+                    <label style={{ fontSize: '12px', fontWeight: 800, color: '#334155' }}>Tipo de Zona</label>
+                    <select
+                      value={batchShelfData.zonaTipo}
+                      onChange={e => setBatchShelfData({ ...batchShelfData, zonaTipo: e.target.value })}
+                      className="form-control"
+                    >
+                      <option value="ALMACENAJE">📦 Almacenaje Normal</option>
+                      <option value="RECEPCION">📥 Zona de Recepción</option>
+                      <option value="DESPACHO">🚚 Zona de Despacho</option>
+                      <option value="DEVOLUCION">⚠️ Devoluciones / Rechazos</option>
+                    </select>
+                  </div>
+
+                  <div className="form-group">
+                    <label style={{ fontSize: '12px', fontWeight: 800, color: '#334155' }}>Sede Almacén</label>
+                    <select
+                      value={batchShelfData.almacenCodigo}
+                      onChange={e => setBatchShelfData({ ...batchShelfData, almacenCodigo: e.target.value })}
+                      className="form-control"
+                    >
+                      <option value="LIN">Sede Central Lince (Lima)</option>
+                      <option value="MIA">Miami Hub (USA)</option>
+                      <option value="TGO">Tingo María</option>
+                    </select>
+                  </div>
                 </div>
 
                 <div className="form-group">
-                  <label style={{ fontSize: '12px', fontWeight: 800, color: '#334155' }}>Código Anaquel</label>
+                  <label style={{ fontSize: '12px', fontWeight: 800, color: '#334155' }}>Descripción / Referencia Física</label>
                   <input
                     type="text"
-                    placeholder="Ej: A3, B1, S1"
-                    value={newPositionData.codigoEstante}
-                    onChange={e => setNewPositionData({ ...newPositionData, codigoEstante: e.target.value })}
+                    placeholder="Ej: Pasillo central lado izquierdo"
+                    value={batchShelfData.descripcion}
+                    onChange={e => setBatchShelfData({ ...batchShelfData, descripcion: e.target.value })}
                     className="form-control"
-                    required
+                  />
+                </div>
+
+                {/* Vista Previa de Posiciones a Generar */}
+                {batchShelfData.codigoEstante && (
+                  <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '10px 12px' }}>
+                    <div style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', marginBottom: '6px' }}>
+                      Vista Previa de Códigos a Generar:
+                    </div>
+                    <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                      {Array.from({ length: batchShelfData.cantidadPisos }).map((_, idx) => (
+                        <span
+                          key={idx}
+                          style={{
+                            background: '#eff6ff',
+                            border: '1px solid #bfdbfe',
+                            color: '#1d4ed8',
+                            fontFamily: 'monospace',
+                            fontWeight: 800,
+                            padding: '3px 8px',
+                            borderRadius: '6px',
+                            fontSize: '11.5px'
+                          }}
+                        >
+                          📍 {batchShelfData.codigoEstante}-P{idx + 1}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '6px' }}>
+                  <button
+                    type="button"
+                    onClick={() => setIsNewPositionModalOpen(false)}
+                    className="btn btn-secondary"
+                  >
+                    Cancelar
+                  </button>
+                  <button type="submit" className="btn btn-primary" style={{ fontWeight: 800 }}>
+                    ✓ Crear Anaquel ({batchShelfData.cantidadPisos} Pisos)
+                  </button>
+                </div>
+              </form>
+            ) : (
+              /* MODO 2: CREAR POSICIÓN INDIVIDUAL */
+              <form onSubmit={handleCreatePosition} className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '12px', padding: '16px 20px' }}>
+                <div className="wms-modal-grid-2">
+                  <div className="form-group">
+                    <label style={{ fontSize: '12px', fontWeight: 800, color: '#334155' }}>Almacén Sede</label>
+                    <select
+                      value={newPositionData.almacenCodigo}
+                      onChange={e => setNewPositionData({ ...newPositionData, almacenCodigo: e.target.value })}
+                      className="form-control"
+                    >
+                      <option value="LIN">Sede Central Lince</option>
+                      <option value="MIA">Miami Hub (USA)</option>
+                      <option value="TGO">Tingo María</option>
+                    </select>
+                  </div>
+
+                  <div className="form-group">
+                    <label style={{ fontSize: '12px', fontWeight: 800, color: '#334155' }}>Código Anaquel</label>
+                    <input
+                      type="text"
+                      placeholder="Ej: A3, B1, S1"
+                      value={newPositionData.codigoEstante}
+                      onChange={e => setNewPositionData({ ...newPositionData, codigoEstante: e.target.value.toUpperCase() })}
+                      className="form-control"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="wms-modal-grid-2">
+                  <div className="form-group">
+                    <label style={{ fontSize: '12px', fontWeight: 800, color: '#334155' }}>Nivel de Piso</label>
+                    <select
+                      value={newPositionData.nivelPiso}
+                      onChange={e => setNewPositionData({ ...newPositionData, nivelPiso: e.target.value })}
+                      className="form-control"
+                    >
+                      <option value="P1">P1 (Inferior)</option>
+                      <option value="P2">P2 (Medio)</option>
+                      <option value="P3">P3 (Superior)</option>
+                      <option value="P4">P4 (Especial)</option>
+                      <option value="P5">P5 (Altillo)</option>
+                    </select>
+                  </div>
+
+                  <div className="form-group">
+                    <label style={{ fontSize: '12px', fontWeight: 800, color: '#334155' }}>Tipo de Zona</label>
+                    <select
+                      value={newPositionData.zonaTipo}
+                      onChange={e => setNewPositionData({ ...newPositionData, zonaTipo: e.target.value })}
+                      className="form-control"
+                    >
+                      <option value="ALMACENAJE">Almacenaje Normal</option>
+                      <option value="RECEPCION">Zona de Recepción</option>
+                      <option value="DESPACHO">Zona de Despacho</option>
+                      <option value="DEVOLUCION">Devoluciones / Rechazos</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="wms-modal-grid-2">
+                  <div className="form-group">
+                    <label style={{ fontSize: '12px', fontWeight: 800, color: '#334155' }}>Capacidad Máx. (Paquetes)</label>
+                    <input
+                      type="number"
+                      value={newPositionData.capacidadMaxPaquetes}
+                      onChange={e => setNewPositionData({ ...newPositionData, capacidadMaxPaquetes: Number(e.target.value) })}
+                      className="form-control"
+                      required
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label style={{ fontSize: '12px', fontWeight: 800, color: '#334155' }}>Peso Máx. (Kg)</label>
+                    <input
+                      type="number"
+                      value={newPositionData.pesoMaxKg}
+                      onChange={e => setNewPositionData({ ...newPositionData, pesoMaxKg: Number(e.target.value) })}
+                      className="form-control"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label style={{ fontSize: '12px', fontWeight: 800, color: '#334155' }}>Descripción / Ubicación Física</label>
+                  <input
+                    type="text"
+                    placeholder="Ej: Anaquel sector derecho pasillo 2"
+                    value={newPositionData.descripcion}
+                    onChange={e => setNewPositionData({ ...newPositionData, descripcion: e.target.value })}
+                    className="form-control"
+                  />
+                </div>
+
+                <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '6px' }}>
+                  <button
+                    type="button"
+                    onClick={() => setIsNewPositionModalOpen(false)}
+                    className="btn btn-secondary"
+                  >
+                    Cancelar
+                  </button>
+                  <button type="submit" className="btn btn-primary" style={{ fontWeight: 800 }}>
+                    ✓ Guardar Posición
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DE EDICIÓN DE POSICIÓN / CAPACIDAD */}
+      {editingPosition && (
+        <div className="modal-backdrop">
+          <div className="modal-dialog" style={{ maxWidth: '480px' }}>
+            <div className="modal-header">
+              <span className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#2563eb' }}>
+                <Edit3 className="w-5 h-5" /> Configurar Posición: {editingPosition.codigoPosicion}
+              </span>
+              <button
+                onClick={() => setEditingPosition(null)}
+                style={{ background: 'none', border: 'none', fontSize: '18px', cursor: 'pointer', color: '#64748b' }}
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleUpdatePosition} className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div className="wms-modal-grid-2">
+                <div className="form-group">
+                  <label style={{ fontSize: '12px', fontWeight: 800, color: '#334155' }}>Anaquel</label>
+                  <input
+                    type="text"
+                    value={editingPosition.codigoEstante}
+                    disabled
+                    className="form-control"
+                    style={{ background: '#f1f5f9', fontWeight: 800 }}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label style={{ fontSize: '12px', fontWeight: 800, color: '#334155' }}>Nivel / Piso</label>
+                  <input
+                    type="text"
+                    value={editingPosition.nivelPiso}
+                    disabled
+                    className="form-control"
+                    style={{ background: '#f1f5f9', fontWeight: 800 }}
                   />
                 </div>
               </div>
 
-              <div className="wms-modal-grid-2">
-                <div className="form-group">
-                  <label style={{ fontSize: '12px', fontWeight: 800, color: '#334155' }}>Nivel de Piso</label>
-                  <select
-                    value={newPositionData.nivelPiso}
-                    onChange={e => setNewPositionData({ ...newPositionData, nivelPiso: e.target.value })}
-                    className="form-control"
-                  >
-                    <option value="P1">P1 (Inferior)</option>
-                    <option value="P2">P2 (Medio)</option>
-                    <option value="P3">P3 (Superior)</option>
-                    <option value="P4">P4 (Especial)</option>
-                  </select>
-                </div>
-
-                <div className="form-group">
-                  <label style={{ fontSize: '12px', fontWeight: 800, color: '#334155' }}>Tipo de Zona</label>
-                  <select
-                    value={newPositionData.zonaTipo}
-                    onChange={e => setNewPositionData({ ...newPositionData, zonaTipo: e.target.value })}
-                    className="form-control"
-                  >
-                    <option value="ALMACENAJE">Almacenaje Normal</option>
-                    <option value="RECEPCION">Zona de Recepción</option>
-                    <option value="DESPACHO">Zona de Despacho</option>
-                    <option value="DEVOLUCION">Devoluciones / Rechazos</option>
-                  </select>
-                </div>
+              <div className="form-group">
+                <label style={{ fontSize: '12px', fontWeight: 800, color: '#334155' }}>Tipo de Zona</label>
+                <select
+                  value={editingPosition.zonaTipo}
+                  onChange={e => setEditingPosition({ ...editingPosition, zonaTipo: e.target.value })}
+                  className="form-control"
+                >
+                  <option value="ALMACENAJE">📦 Almacenaje</option>
+                  <option value="RECEPCION">📥 Recepción (REC)</option>
+                  <option value="DESPACHO">🚚 Despacho (DSP)</option>
+                  <option value="DEVOLUCION">⚠️ Devoluciones</option>
+                </select>
               </div>
 
               <div className="wms-modal-grid-2">
@@ -2355,8 +3188,8 @@ export default function InventoryTab({
                   <label style={{ fontSize: '12px', fontWeight: 800, color: '#334155' }}>Capacidad Máx. (Paquetes)</label>
                   <input
                     type="number"
-                    value={newPositionData.capacidadMaxPaquetes}
-                    onChange={e => setNewPositionData({ ...newPositionData, capacidadMaxPaquetes: Number(e.target.value) })}
+                    value={editingPosition.capacidadMaxPaquetes}
+                    onChange={e => setEditingPosition({ ...editingPosition, capacidadMaxPaquetes: Number(e.target.value) })}
                     className="form-control"
                     required
                   />
@@ -2366,8 +3199,8 @@ export default function InventoryTab({
                   <label style={{ fontSize: '12px', fontWeight: 800, color: '#334155' }}>Peso Máx. (Kg)</label>
                   <input
                     type="number"
-                    value={newPositionData.pesoMaxKg}
-                    onChange={e => setNewPositionData({ ...newPositionData, pesoMaxKg: Number(e.target.value) })}
+                    value={editingPosition.pesoMaxKg}
+                    onChange={e => setEditingPosition({ ...editingPosition, pesoMaxKg: Number(e.target.value) })}
                     className="form-control"
                     required
                   />
@@ -2375,27 +3208,25 @@ export default function InventoryTab({
               </div>
 
               <div className="form-group">
-                <label style={{ fontSize: '12px', fontWeight: 800, color: '#334155' }}>Descripción / Ubicación Física</label>
+                <label style={{ fontSize: '12px', fontWeight: 800, color: '#334155' }}>Descripción / Referencia</label>
                 <input
                   type="text"
-                  placeholder="Ej: Anaquel sector derecho pasillo 2"
-                  value={newPositionData.descripcion}
-                  onChange={e => setNewPositionData({ ...newPositionData, descripcion: e.target.value })}
+                  value={editingPosition.descripcion || ''}
+                  onChange={e => setEditingPosition({ ...editingPosition, descripcion: e.target.value })}
                   className="form-control"
                 />
               </div>
 
-              <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '10px' }}>
+              <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '6px' }}>
                 <button
                   type="button"
-                  onClick={() => setIsNewPositionModalOpen(false)}
-                  className="btn"
-                  style={{ background: '#f1f5f9', color: '#475569', fontWeight: 700 }}
+                  onClick={() => setEditingPosition(null)}
+                  className="btn btn-secondary"
                 >
                   Cancelar
                 </button>
                 <button type="submit" className="btn btn-primary" style={{ fontWeight: 800 }}>
-                  ✓ Guardar Posición
+                  ✓ Guardar Cambios
                 </button>
               </div>
             </form>
