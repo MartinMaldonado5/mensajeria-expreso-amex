@@ -694,7 +694,7 @@ export default function DniMatrixTab({ paquetes = [], clientes = [] }: DniMatrix
 
   return (
     <div className="dni-matrix-theme">
-      {/* 1. APP HEADER GLOBAL CON MÉTRICAS */}
+      {/* 1. APP HEADER GLOBAL (Nombre a la izquierda, Acciones a la derecha) */}
       <header className="app-header">
         <div className="header-brand">
           <div className="brand-icon">
@@ -709,37 +709,6 @@ export default function DniMatrixTab({ paquetes = [], clientes = [] }: DniMatrix
           <div>
             <h1 className="brand-title">DNI MATRIX EXPRESS</h1>
             <span className="brand-subtitle">Procesador Masivo de DNI por Cupos (WhatsApp Web &rarr; Word A4)</span>
-          </div>
-        </div>
-
-        {/* Métricas en Tiempo Real */}
-        <div className="header-stats">
-          <div className="stat-pill total">
-            <span className="stat-label">Total Cupos</span>
-            <span className="stat-value">{totalSlots}</span>
-          </div>
-          <div className="stat-pill ready">
-            <span className="stat-indicator"></span>
-            <span className="stat-label">Completos</span>
-            <span className="stat-value">{stats.ready}</span>
-          </div>
-          <div className="stat-pill partial">
-            <span className="stat-indicator"></span>
-            <span className="stat-label">Incompletos</span>
-            <span className="stat-value">{stats.partial}</span>
-          </div>
-          <div className="stat-pill empty">
-            <span className="stat-indicator"></span>
-            <span className="stat-label">Vacíos</span>
-            <span className="stat-value">{stats.empty}</span>
-          </div>
-          <div className="progress-container" title="Progreso del lote">
-            <div className="progress-text">
-              <span>{progressPercent}%</span>
-            </div>
-            <div className="progress-bar-bg">
-              <div className="progress-fill" style={{ width: `${progressPercent}%` }}></div>
-            </div>
           </div>
         </div>
 
@@ -1201,6 +1170,39 @@ export default function DniMatrixTab({ paquetes = [], clientes = [] }: DniMatrix
                 >
                   Vacíos ({stats.empty})
                 </button>
+              </div>
+            </div>
+
+            {/* MÉTRICAS COMPACTAS ADAPTADAS DEBAJO DEL NOMBRE */}
+            <div className="matrix-stats-widget">
+              <div className="matrix-stats-pills">
+                <div className="mstat-pill total">
+                  <span className="mstat-lbl">TOTAL</span>
+                  <span className="mstat-num">{totalSlots}</span>
+                </div>
+                <div className="mstat-pill ready">
+                  <span className="stat-indicator"></span>
+                  <span className="mstat-lbl">COMPLETOS</span>
+                  <span className="mstat-num">{stats.ready}</span>
+                </div>
+                <div className="mstat-pill partial">
+                  <span className="stat-indicator"></span>
+                  <span className="mstat-lbl">INCOMPLETOS</span>
+                  <span className="mstat-num">{stats.partial}</span>
+                </div>
+                <div className="mstat-pill empty">
+                  <span className="stat-indicator"></span>
+                  <span className="mstat-lbl">VACÍOS</span>
+                  <span className="mstat-num">{stats.empty}</span>
+                </div>
+              </div>
+
+              {/* Barra de Progreso del Lote */}
+              <div className="matrix-progress-row" title="Progreso del lote">
+                <span className="mprog-pct">{progressPercent}%</span>
+                <div className="mprog-track">
+                  <div className="progress-fill" style={{ width: `${progressPercent}%` }}></div>
+                </div>
               </div>
             </div>
 
