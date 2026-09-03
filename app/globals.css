@@ -198,6 +198,32 @@ body {
   flex-direction: column;
 }
 
+/* Modo DNI Matrix: Integración Dark 100% inmersiva sin bordes ni fondo blanco */
+.main-content.dni-matrix-mode {
+  background: #0a0d14 !important;
+  padding: 0 !important;
+  color: #f8fafc !important;
+  overflow-x: hidden;
+}
+
+.main-content.dni-matrix-mode::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+
+.main-content.dni-matrix-mode::-webkit-scrollbar-track {
+  background: #0a0d14;
+}
+
+.main-content.dni-matrix-mode::-webkit-scrollbar-thumb {
+  background: #1e293b;
+  border-radius: 9999px;
+}
+
+.main-content.dni-matrix-mode::-webkit-scrollbar-thumb:hover {
+  background: #334155;
+}
+
 /* Custom Sleek Scrollbar */
 ::-webkit-scrollbar {
   width: 6px;

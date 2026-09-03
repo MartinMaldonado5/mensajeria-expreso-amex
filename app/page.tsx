@@ -557,7 +557,7 @@ export default function DashboardPage() {
           onCloseSidebar={() => setIsSidebarCollapsed(true)}
         />
 
-        <main className="main-content">
+        <main className={`main-content ${activeTab === 'dni-matrix' ? 'dni-matrix-mode' : ''}`}>
           {isLoadingInitialData ? (
             <PageSkeleton />
           ) : (
