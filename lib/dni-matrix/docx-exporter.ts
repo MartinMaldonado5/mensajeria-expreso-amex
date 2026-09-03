@@ -287,3 +287,85 @@ export async function exportZipDocx(
   const zipBlob = await zip.generateAsync({ type: 'blob' });
   saveAs(zipBlob, `Lote_DNI_Matrix_${completeSlots.length}_Expedientes_${dateStr}.zip`);
 }
+
+/**
+ * GUARDAR DIRECTAMENTE EN UNA CARPETA LOCAL (SIN COMPRIMIR)
+ * Usa la File System Access API nativa del navegador (showDirectoryPicker)
+ */
+export async function exportToDirectoryFolder(
+  slots: DniSlotData[],
+  onProgress?: (msg: string, percent?: number) => void
+): Promise<{ success: boolean; count: number; cancelled?: boolean }> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const w = window as any;
+  if (!w.showDirectoryPicker) {
+    throw new Error('Tu navegador no soporta la selección directa de carpetas. Usa Google Chrome o Microsoft Edge.');
+  }
+
+  const completeSlots = slots.filter((s) => s.anverso && s.reverso);
+  if (completeSlots.length === 0) {
+    throw new Error('No hay expedientes completos para exportar.');
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let dirHandle: any;
+  try {
+    dirHandle = await w.showDirectoryPicker({
+      id: 'dni_export_folder',
+      mode: 'readwrite',
+      startIn: 'documents'
+    });
+  } catch (err: unknown) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    if ((err as any)?.name === 'AbortError') {
+      return { success: false, count: 0, cancelled: true };
+    }
+    throw err;
+  }
+
+  const total = completeSlots.length;
+  for (let i = 0; i < total; i++) {
+    const slot = completeSlots[i];
+    const percent = Math.round(((i + 1) / total) * 100);
+    onProgress?.(`Guardando expediente ${i + 1} de ${total}...`, percent);
+
+    const children = await buildExpedienteChildren(slot);
+    const doc = new Document({
+      title: `Expediente #${slot.id}`,
+      creator: 'Amex Courier ERP - DNI Matrix Express',
+      sections: [
+        {
+          properties: {
+            page: {
+              size: {
+                width: convertMillimetersToTwip(210),
+                height: convertMillimetersToTwip(297)
+              },
+              margin: {
+                top: MARGIN_TWIPS,
+                bottom: MARGIN_TWIPS,
+                left: MARGIN_TWIPS,
+                right: MARGIN_TWIPS
+              }
+            }
+          },
+          children
+        }
+      ]
+    });
+
+    const docBlob = await Packer.toBlob(doc);
+    const labelSuffix = slot.label ? `_${sanitizeFilename(slot.label)}` : '';
+    const fileNum = String(slot.id).padStart(4, '0');
+    const docxName = `Expediente_${fileNum}${labelSuffix}.docx`;
+
+    const fileHandle = await dirHandle.getFileHandle(docxName, { create: true });
+    const writable = await fileHandle.createWritable();
+    await writable.write(docBlob);
+    await writable.close();
+  }
+
+  onProgress?.('¡Todos los archivos Word han sido guardados con éxito!', 100);
+  return { success: true, count: total };
+}
+

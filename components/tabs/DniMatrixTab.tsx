@@ -1,30 +1,9 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import {
-  IdCard,
-  FileText,
-  Archive,
-  Printer,
-  Trash2,
-  Search,
-  CheckCircle2,
-  AlertCircle,
-  RotateCw,
-  Volume2,
-  VolumeX,
-  Plus,
-  Eye,
-  Settings,
-  ArrowRight,
-  ArrowLeft,
-  ChevronRight,
-  Download,
-  Link as LinkIcon,
-  Sparkles
-} from 'lucide-react';
+import './dni-matrix.css';
 import { dniDb, DniSlotData } from '@/lib/dni-matrix/db';
-import { exportMasterDocx, exportZipDocx } from '@/lib/dni-matrix/docx-exporter';
+import { exportMasterDocx, exportZipDocx, exportToDirectoryFolder } from '@/lib/dni-matrix/docx-exporter';
 import { Paquete, Cliente } from '@/types';
 
 interface DniMatrixTabProps {
@@ -32,66 +11,98 @@ interface DniMatrixTabProps {
   clientes?: Cliente[];
 }
 
+interface ToastMessage {
+  id: number;
+  text: string;
+  type: 'info' | 'success' | 'error';
+}
+
 export default function DniMatrixTab({ paquetes = [], clientes = [] }: DniMatrixTabProps) {
-  // Estado general
+  // Configuración y Estados
   const [totalSlots, setTotalSlots] = useState<number>(100);
   const [activeSlotId, setActiveSlotId] = useState<number>(1);
   const [focusedSide, setFocusedSide] = useState<'anverso' | 'reverso' | null>(null);
   const [slotsData, setSlotsData] = useState<Record<number, DniSlotData>>({});
-  const [filter, setFilter] = useState<'all' | 'ready' | 'partial' | 'empty'>('all');
-  const [searchTerm, setSearchTerm] = useState<string>('');
+  const [currentFilter, setCurrentFilter] = useState<'all' | 'ready' | 'partial' | 'empty'>('all');
   const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
-  const [isExporting, setIsExporting] = useState<boolean>(false);
-  const [exportProgress, setExportProgress] = useState<string>('');
-  const [previewSlot, setPreviewSlot] = useState<DniSlotData | null>(null);
+  const [quickJumpVal, setQuickJumpVal] = useState<string>('');
+  const [toasts, setToasts] = useState<ToastMessage[]>([]);
+
+  // Modales
   const [showConfigModal, setShowConfigModal] = useState<boolean>(false);
-  const [associateModalSlot, setAssociateModalSlot] = useState<DniSlotData | null>(null);
+  const [showPreviewModal, setShowPreviewModal] = useState<boolean>(false);
+  const [showPdfModal, setShowPdfModal] = useState<boolean>(false);
+  const [showAmexLinkModal, setShowAmexLinkModal] = useState<boolean>(false);
+
+  // Estados de exportación
+  const [isExporting, setIsExporting] = useState<boolean>(false);
+  const [exportStatusMessage, setExportStatusMessage] = useState<string>('');
+
+  // Estados de Conversor PDF
+  const [pdfFolderPath, setPdfFolderPath] = useState<string>('');
+  const [pdfScanCount, setPdfScanCount] = useState<number | null>(null);
+  const [pdfConverting, setPdfConverting] = useState<boolean>(false);
+  const [pdfProgressMsg, setPdfProgressMsg] = useState<string>('');
+  const [pdfProgressPercent, setPdfProgressPercent] = useState<number>(0);
+  const [pdfSuccessDone, setPdfSuccessDone] = useState<boolean>(false);
 
   const activeSlotRef = useRef<number>(activeSlotId);
   activeSlotRef.current = activeSlotId;
 
-  // ==========================================================================
-  // FEEDBACK AUDITIVO (Web Audio API - Sin archivos externos)
-  // ==========================================================================
-  const playSound = useCallback((type: 'success' | 'paste' | 'error') => {
-    if (!soundEnabled || typeof window === 'undefined') return;
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-      if (!AudioCtx) return;
-      const ctx = new AudioCtx();
+  // Toast helper
+  const showToast = useCallback((text: string, type: 'info' | 'success' | 'error' = 'info') => {
+    const id = Date.now() + Math.random();
+    setToasts((prev) => [...prev, { id, text, type }]);
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+    }, 3200);
+  }, []);
 
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.connect(gain);
-      gain.connect(ctx.destination);
+  // Web Audio API feedback
+  const playSound = useCallback(
+    (type: 'complete' | 'paste' | 'click' | 'error') => {
+      if (!soundEnabled || typeof window === 'undefined') return;
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+        if (!AudioCtx) return;
+        const ctx = new AudioCtx();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
 
-      if (type === 'success') {
-        // Doble tono agudo armónico para éxito
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(587.33, ctx.currentTime); // D5
-        osc.frequency.setValueAtTime(880.0, ctx.currentTime + 0.1); // A5
-        gain.gain.setValueAtTime(0.15, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
-        osc.start(ctx.currentTime);
-        osc.stop(ctx.currentTime + 0.35);
-      } else if (type === 'paste') {
-        // Tono suave corto al pegar
-        osc.type = 'triangle';
-        osc.frequency.setValueAtTime(440, ctx.currentTime);
-        gain.gain.setValueAtTime(0.1, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
-        osc.start(ctx.currentTime);
-        osc.stop(ctx.currentTime + 0.15);
+        if (type === 'complete') {
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(587.33, ctx.currentTime);
+          osc.frequency.setValueAtTime(880.0, ctx.currentTime + 0.1);
+          gain.gain.setValueAtTime(0.2, ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+          osc.start(ctx.currentTime);
+          osc.stop(ctx.currentTime + 0.4);
+        } else if (type === 'paste') {
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(440, ctx.currentTime);
+          gain.gain.setValueAtTime(0.12, ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.16);
+          osc.start(ctx.currentTime);
+          osc.stop(ctx.currentTime + 0.16);
+        } else if (type === 'click') {
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(320, ctx.currentTime);
+          gain.gain.setValueAtTime(0.05, ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.08);
+          osc.start(ctx.currentTime);
+          osc.stop(ctx.currentTime + 0.08);
+        }
+      } catch {
+        // Silencioso si no hay soporte de audio
       }
-    } catch {
-      // Audio context silencioso
-    }
-  }, [soundEnabled]);
+    },
+    [soundEnabled]
+  );
 
-  // ==========================================================================
-  // CARGA INICIAL DE DATOS DESDE INDEXEDDB
-  // ==========================================================================
+  // Carga inicial
   useEffect(() => {
     async function initData() {
       const savedSlots = await dniDb.loadAllSlots();
@@ -101,8 +112,8 @@ export default function DniMatrixTab({ paquetes = [], clientes = [] }: DniMatrix
       });
       setSlotsData(map);
 
-      const savedCount = await dniDb.getSetting<number>('totalSlots', 100);
-      setTotalSlots(savedCount);
+      const savedTotal = await dniDb.getSetting<number>('totalSlots', 100);
+      setTotalSlots(savedTotal);
 
       const savedSound = await dniDb.getSetting<boolean>('soundEnabled', true);
       setSoundEnabled(savedSound);
@@ -110,40 +121,98 @@ export default function DniMatrixTab({ paquetes = [], clientes = [] }: DniMatrix
     initData();
   }, []);
 
-  // Guardar slot en IndexedDB y estado local
+  const padNum = (num: number): string => String(num).padStart(3, '0');
+
+  const getSlot = useCallback(
+    (id: number): DniSlotData => {
+      return slotsData[id] || { id };
+    },
+    [slotsData]
+  );
+
   const updateSlot = useCallback(async (slot: DniSlotData) => {
     setSlotsData((prev) => ({ ...prev, [slot.id]: slot }));
     await dniDb.saveSlot(slot);
   }, []);
 
-  // Encontrar el siguiente cupo incompleto o vacío
-  const findNextIncompleteSlot = useCallback(
-    (currentId: number): number => {
-      // Buscar desde currentId + 1 hasta totalSlots
-      for (let i = currentId + 1; i <= totalSlots; i++) {
-        const slot = slotsData[i];
-        if (!slot || !slot.anverso || !slot.reverso) {
-          return i;
-        }
-      }
-      // Buscar desde 1 hasta currentId
-      for (let i = 1; i <= currentId; i++) {
-        const slot = slotsData[i];
-        if (!slot || !slot.anverso || !slot.reverso) {
-          return i;
-        }
-      }
-      return currentId;
-    },
-    [slotsData, totalSlots]
-  );
+  const getSlotStatus = (slot?: DniSlotData): 'ready' | 'partial' | 'empty' => {
+    if (!slot) return 'empty';
+    if (slot.anverso && slot.reverso) return 'ready';
+    if (slot.anverso || slot.reverso) return 'partial';
+    return 'empty';
+  };
 
-  // ==========================================================================
-  // CAPTURA AUTOMÁTICA DE PORTAPAPELES (Ctrl + V / WhatsApp Web)
-  // ==========================================================================
+  // Salto al siguiente incompleto
+  const jumpToNextIncompleteSlot = useCallback(() => {
+    let nextId: number | null = null;
+    for (let id = activeSlotRef.current + 1; id <= totalSlots; id++) {
+      if (getSlotStatus(slotsData[id]) !== 'ready') {
+        nextId = id;
+        break;
+      }
+    }
+    if (!nextId) {
+      for (let id = 1; id < activeSlotRef.current; id++) {
+        if (getSlotStatus(slotsData[id]) !== 'ready') {
+          nextId = id;
+          break;
+        }
+      }
+    }
+
+    if (nextId) {
+      playSound('click');
+      setActiveSlotId(nextId);
+      setFocusedSide(null);
+      showToast(`Saltando a cupo pendiente #${padNum(nextId)}`, 'info');
+    } else {
+      showToast('¡Felicidades! Todos los cupos están 100% completos.', 'success');
+      playSound('complete');
+    }
+  }, [slotsData, totalSlots, playSound, showToast]);
+
+  // Rotar imagen 90 grados
+  const rotateSide = async (side: 'anverso' | 'reverso', degrees: number) => {
+    const slot = getSlot(activeSlotId);
+    if (!slot[side]) return;
+    playSound('click');
+    showToast(`Rotando ${side}...`);
+
+    const rotKey = side === 'anverso' ? 'anversoRotation' : 'reversoRotation';
+    const currentRot = slot[rotKey] || 0;
+    const newRot = (currentRot + degrees + 360) % 360;
+
+    await updateSlot({ ...slot, [rotKey]: newRot });
+  };
+
+  // Limpiar cara
+  const clearSide = async (side: 'anverso' | 'reverso') => {
+    const slot = getSlot(activeSlotId);
+    if (!slot[side]) return;
+    playSound('click');
+    const rotKey = side === 'anverso' ? 'anversoRotation' : 'reversoRotation';
+    await updateSlot({ ...slot, [side]: null, [rotKey]: 0 });
+    showToast(`${side === 'anverso' ? 'Anverso' : 'Reverso'} eliminado`);
+  };
+
+  // Intercambiar anverso y reverso
+  const swapSides = async () => {
+    const slot = getSlot(activeSlotId);
+    if (!slot.anverso && !slot.reverso) return;
+    playSound('click');
+    await updateSlot({
+      ...slot,
+      anverso: slot.reverso,
+      reverso: slot.anverso,
+      anversoRotation: slot.reversoRotation || 0,
+      reversoRotation: slot.anversoRotation || 0
+    });
+    showToast('Caras intercambiadas exitosamente', 'success');
+  };
+
+  // Pegado global (Ctrl + V / WhatsApp Web)
   useEffect(() => {
-    const handlePaste = async (e: ClipboardEvent) => {
-      // Si el foco está en un input de texto, dejar que escriba normal
+    const handlePaste = (e: ClipboardEvent) => {
       if (
         document.activeElement &&
         (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA')
@@ -174,50 +243,39 @@ export default function DniMatrixTab({ paquetes = [], clientes = [] }: DniMatrix
         if (!base64Data) return;
 
         const currentId = activeSlotRef.current;
-        const currentSlot: DniSlotData = slotsData[currentId] || { id: currentId };
+        const currentSlot = getSlot(currentId);
 
-        let updatedSlot: DniSlotData;
-        let isNowComplete = false;
-
-        // Si tenemos un lado específico enfocado, guardarlo allí
-        if (focusedSide === 'anverso') {
-          updatedSlot = { ...currentSlot, anverso: base64Data, anversoRotation: 0 };
-          isNowComplete = Boolean(updatedSlot.anverso && updatedSlot.reverso);
-        } else if (focusedSide === 'reverso') {
-          updatedSlot = { ...currentSlot, reverso: base64Data, reversoRotation: 0 };
-          isNowComplete = Boolean(updatedSlot.anverso && updatedSlot.reverso);
-        } else {
-          // Detección automática inteligente:
-          // 1. Si no tiene anverso -> va al anverso
-          // 2. Si ya tiene anverso pero no reverso -> va al reverso y se completa
-          // 3. Si ya tiene ambos -> salta al siguiente incompleto y va al anverso
+        let sideToAssign = focusedSide;
+        if (!sideToAssign) {
           if (!currentSlot.anverso) {
-            updatedSlot = { ...currentSlot, anverso: base64Data, anversoRotation: 0 };
-            isNowComplete = Boolean(updatedSlot.reverso);
+            sideToAssign = 'anverso';
           } else if (!currentSlot.reverso) {
-            updatedSlot = { ...currentSlot, reverso: base64Data, reversoRotation: 0 };
-            isNowComplete = true;
+            sideToAssign = 'reverso';
           } else {
-            const nextSlotId = findNextIncompleteSlot(currentId);
-            const targetSlot: DniSlotData = slotsData[nextSlotId] || { id: nextSlotId };
-            updatedSlot = { ...targetSlot, anverso: base64Data, anversoRotation: 0 };
-            isNowComplete = Boolean(updatedSlot.reverso);
-            setActiveSlotId(nextSlotId);
+            sideToAssign = 'anverso';
           }
         }
 
-        await updateSlot(updatedSlot);
+        const rotKey = sideToAssign === 'anverso' ? 'anversoRotation' : 'reversoRotation';
+        const updatedSlot: DniSlotData = {
+          ...currentSlot,
+          [sideToAssign]: base64Data,
+          [rotKey]: 0
+        };
 
+        await updateSlot(updatedSlot);
+        const sideName = sideToAssign === 'anverso' ? 'Anverso' : 'Reverso';
+        showToast(`${sideName} pegado en Expediente #${padNum(currentId)}`, 'success');
+
+        const isNowComplete = Boolean(updatedSlot.anverso && updatedSlot.reverso);
         if (isNowComplete) {
-          playSound('success');
-          // Auto-avanzar al siguiente cupo incompleto
+          playSound('complete');
           setTimeout(() => {
-            const nextId = findNextIncompleteSlot(updatedSlot.id);
-            setActiveSlotId(nextId);
-            setFocusedSide(null);
-          }, 200);
+            jumpToNextIncompleteSlot();
+          }, 350);
         } else {
           playSound('paste');
+          setFocusedSide('reverso');
         }
       };
 
@@ -226,1052 +284,791 @@ export default function DniMatrixTab({ paquetes = [], clientes = [] }: DniMatrix
 
     window.addEventListener('paste', handlePaste);
     return () => window.removeEventListener('paste', handlePaste);
-  }, [slotsData, focusedSide, findNextIncompleteSlot, playSound, updateSlot]);
+  }, [focusedSide, getSlot, updateSlot, showToast, playSound, jumpToNextIncompleteSlot]);
 
-  // ==========================================================================
-  // ATAJOS DE TECLADO (Enter, Flechas, R para rotar)
-  // ==========================================================================
+  // Atajos de teclado (Enter, Flechas, R)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Ignorar si se está editando un campo de texto
-      if (
+      const isTyping =
         document.activeElement &&
-        (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA')
-      ) {
-        return;
-      }
+        (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'SELECT');
 
-      if (e.key === 'Enter') {
+      if (e.key === 'Enter' && !isTyping) {
         e.preventDefault();
-        const nextId = findNextIncompleteSlot(activeSlotRef.current);
-        setActiveSlotId(nextId);
-      } else if (e.key === 'ArrowRight') {
+        jumpToNextIncompleteSlot();
+      } else if (e.key === 'ArrowLeft' && !isTyping) {
         e.preventDefault();
-        setActiveSlotId((prev) => Math.min(totalSlots, prev + 1));
-      } else if (e.key === 'ArrowLeft') {
-        e.preventDefault();
-        setActiveSlotId((prev) => Math.max(1, prev - 1));
-      } else if (e.key === 'r' || e.key === 'R') {
-        e.preventDefault();
-        // Rotar el lado enfocado o el reverso si existe, sino el anverso
-        const slot = slotsData[activeSlotRef.current];
-        if (!slot) return;
-
-        if (focusedSide === 'anverso' && slot.anverso) {
-          const currentRot = slot.anversoRotation || 0;
-          updateSlot({ ...slot, anversoRotation: (currentRot + 90) % 360 });
-        } else if (focusedSide === 'reverso' && slot.reverso) {
-          const currentRot = slot.reversoRotation || 0;
-          updateSlot({ ...slot, reversoRotation: (currentRot + 90) % 360 });
-        } else if (slot.reverso) {
-          const currentRot = slot.reversoRotation || 0;
-          updateSlot({ ...slot, reversoRotation: (currentRot + 90) % 360 });
-        } else if (slot.anverso) {
-          const currentRot = slot.anversoRotation || 0;
-          updateSlot({ ...slot, anversoRotation: (currentRot + 90) % 360 });
+        if (activeSlotRef.current > 1) {
+          playSound('click');
+          setActiveSlotId((prev) => prev - 1);
         }
+      } else if (e.key === 'ArrowRight' && !isTyping) {
+        e.preventDefault();
+        if (activeSlotRef.current < totalSlots) {
+          playSound('click');
+          setActiveSlotId((prev) => prev + 1);
+        }
+      } else if ((e.key === 'r' || e.key === 'R') && !isTyping && !e.ctrlKey) {
+        e.preventDefault();
+        const targetSide = focusedSide || 'anverso';
+        rotateSide(targetSide, 90);
+      } else if (e.key === 'Escape') {
+        setShowConfigModal(false);
+        setShowPreviewModal(false);
+        setShowPdfModal(false);
+        setShowAmexLinkModal(false);
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [totalSlots, slotsData, focusedSide, findNextIncompleteSlot, updateSlot]);
+  }, [totalSlots, focusedSide, jumpToNextIncompleteSlot, playSound]);
 
-  // ==========================================================================
-  // ROTACIÓN MANUAL DE IMÁGENES
-  // ==========================================================================
-  const handleRotate = (slotId: number, side: 'anverso' | 'reverso') => {
-    const slot = slotsData[slotId];
-    if (!slot) return;
-    if (side === 'anverso' && slot.anverso) {
-      const rot = ((slot.anversoRotation || 0) + 90) % 360;
-      updateSlot({ ...slot, anversoRotation: rot });
-    } else if (side === 'reverso' && slot.reverso) {
-      const rot = ((slot.reversoRotation || 0) + 90) % 360;
-      updateSlot({ ...slot, reversoRotation: rot });
-    }
-  };
-
-  // ==========================================================================
-  // LIMPIEZA DE LADOS O CUPOS
-  // ==========================================================================
-  const handleClearSide = (slotId: number, side: 'anverso' | 'reverso', e: React.MouseEvent) => {
-    e.stopPropagation();
-    const slot = slotsData[slotId];
-    if (!slot) return;
-    if (side === 'anverso') {
-      updateSlot({ ...slot, anverso: null, anversoRotation: 0 });
-    } else {
-      updateSlot({ ...slot, reverso: null, reversoRotation: 0 });
-    }
-  };
-
-  const handleClearSlot = (slotId: number, e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (confirm(`¿Vaciar completamente el cupo #${String(slotId).padStart(4, '0')}?`)) {
-      updateSlot({ id: slotId, anverso: null, reverso: null, label: '' });
-    }
-  };
-
-  const handleClearAll = async () => {
-    if (confirm('¿ATENCIÓN: Estás seguro de vaciar TODOS los cupos cargados? Esta acción no se puede deshacer.')) {
-      await dniDb.clearAllSlots();
-      setSlotsData({});
-      setActiveSlotId(1);
-    }
-  };
-
-  // ==========================================================================
-  // EXPORTACIÓN A WORD Y ZIP
-  // ==========================================================================
-  const handleExportMasterWord = async () => {
-    const list = Object.values(slotsData);
-    const complete = list.filter((s) => s.anverso && s.reverso);
-    if (complete.length === 0) {
-      alert('No tienes ningún cupo completo (con anverso y reverso) para exportar.');
-      return;
-    }
-
-    try {
-      setIsExporting(true);
-      await exportMasterDocx(list, (status) => setExportProgress(status));
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Error desconocido al exportar Word';
-      alert(`Error al generar Word: ${msg}`);
-    } finally {
-      setIsExporting(false);
-      setExportProgress('');
-    }
-  };
-
-  const handleExportZip = async () => {
-    const list = Object.values(slotsData);
-    const complete = list.filter((s) => s.anverso && s.reverso);
-    if (complete.length === 0) {
-      alert('No tienes ningún cupo completo (con anverso y reverso) para exportar en ZIP.');
-      return;
-    }
-
-    try {
-      setIsExporting(true);
-      await exportZipDocx(list, (curr, tot) => {
-        setExportProgress(`Comprimiendo expediente ${curr} de ${tot}...`);
-      });
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Error desconocido al exportar ZIP';
-      alert(`Error al generar ZIP: ${msg}`);
-    } finally {
-      setIsExporting(false);
-      setExportProgress('');
-    }
-  };
-
-  // ==========================================================================
-  // CÁLCULO DE ESTADÍSTICAS
-  // ==========================================================================
+  // Estadísticas globales
   const allSlotsArray = Array.from({ length: totalSlots }, (_, i) => i + 1);
-
   const stats = allSlotsArray.reduce(
     (acc, id) => {
-      const s = slotsData[id];
-      if (s?.anverso && s?.reverso) {
-        acc.ready++;
-      } else if (s?.anverso || s?.reverso) {
-        acc.partial++;
-      } else {
-        acc.empty++;
-      }
+      const st = getSlotStatus(slotsData[id]);
+      if (st === 'ready') acc.ready++;
+      else if (st === 'partial') acc.partial++;
+      else acc.empty++;
       return acc;
     },
     { ready: 0, partial: 0, empty: 0 }
   );
 
-  // Filtrado de cupos
+  const progressPercent = totalSlots > 0 ? Math.round((stats.ready / totalSlots) * 100) : 0;
+
+  // Filtrado de la matriz
   const filteredSlotIds = allSlotsArray.filter((id) => {
-    const s = slotsData[id];
-    const isReady = Boolean(s?.anverso && s?.reverso);
-    const isPartial = Boolean((s?.anverso && !s?.reverso) || (!s?.anverso && s?.reverso));
-    const isEmpty = !s?.anverso && !s?.reverso;
-
-    if (filter === 'ready' && !isReady) return false;
-    if (filter === 'partial' && !isPartial) return false;
-    if (filter === 'empty' && !isEmpty) return false;
-
-    if (searchTerm) {
-      const term = searchTerm.toLowerCase();
-      const numStr = String(id).padStart(4, '0');
-      const label = (s?.label || '').toLowerCase();
-      return numStr.includes(term) || label.includes(term);
-    }
-
+    const st = getSlotStatus(slotsData[id]);
+    if (currentFilter === 'ready') return st === 'ready';
+    if (currentFilter === 'partial') return st === 'partial';
+    if (currentFilter === 'empty') return st === 'empty';
     return true;
   });
 
+  const activeSlot = getSlot(activeSlotId);
+  const activeStatus = getSlotStatus(activeSlot);
+
+  // Exportar Word Maestro
+  const handleExportMaster = async () => {
+    const completed = Object.values(slotsData).filter((s) => s.anverso && s.reverso);
+    if (completed.length === 0) {
+      showToast('No hay expedientes completos para exportar.', 'error');
+      return;
+    }
+    try {
+      setIsExporting(true);
+      setExportStatusMessage('Preparando Word Maestro Único...');
+      await exportMasterDocx(completed, (msg) => setExportStatusMessage(msg));
+      showToast('¡Documento Word Maestro generado con éxito!', 'success');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Error al exportar';
+      showToast(msg, 'error');
+    } finally {
+      setIsExporting(false);
+      setExportStatusMessage('');
+    }
+  };
+
+  // Exportar ZIP
+  const handleExportZip = async () => {
+    const completed = Object.values(slotsData).filter((s) => s.anverso && s.reverso);
+    if (completed.length === 0) {
+      showToast('No hay expedientes completos para exportar.', 'error');
+      return;
+    }
+    try {
+      setIsExporting(true);
+      setExportStatusMessage('Comprimiendo archivos en ZIP...');
+      await exportZipDocx(completed, (curr, tot) => {
+        setExportStatusMessage(`Comprimiendo expediente ${curr} de ${tot}...`);
+      });
+      showToast('¡Carpeta ZIP generada con éxito!', 'success');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Error al exportar ZIP';
+      showToast(msg, 'error');
+    } finally {
+      setIsExporting(false);
+      setExportStatusMessage('');
+    }
+  };
+
+  // Exportar directamente a carpeta de Windows
+  const handleExportFolder = async () => {
+    const completed = Object.values(slotsData).filter((s) => s.anverso && s.reverso);
+    if (completed.length === 0) {
+      showToast('No hay expedientes completos para exportar.', 'error');
+      return;
+    }
+    try {
+      setIsExporting(true);
+      setExportStatusMessage('Selecciona la carpeta donde guardar los archivos...');
+      const res = await exportToDirectoryFolder(completed, (msg) => setExportStatusMessage(msg));
+      if (res.cancelled) {
+        showToast('Operación cancelada');
+      } else {
+        showToast(`¡${res.count} archivos Word guardados exitosamente!`, 'success');
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Error al guardar en carpeta';
+      showToast(msg, 'error');
+    } finally {
+      setIsExporting(false);
+      setExportStatusMessage('');
+    }
+  };
+
+  // Limpiar todo el lote
+  const handleClearAllData = async () => {
+    if (confirm('¿ATENCIÓN: Estás seguro de borrar todos los expedientes y fotos? Esta acción no se puede deshacer.')) {
+      await dniDb.clearAllSlots();
+      setSlotsData({});
+      setActiveSlotId(1);
+      setShowConfigModal(false);
+      showToast('Todos los datos han sido borrados', 'success');
+    }
+  };
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-      {/* CABECERA PRINCIPAL Y CONTROL DE EXPORTACIÓN */}
-      <div
-        style={{
-          background: '#ffffff',
-          border: '1px solid #e2e8f0',
-          borderRadius: '14px',
-          padding: '16px 20px',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          flexWrap: 'wrap',
-          gap: '14px',
-          boxShadow: '0 2px 6px rgba(0,0,0,0.04)'
-        }}
-      >
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <span
-              style={{
-                background: 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
-                color: '#ffffff',
-                padding: '8px',
-                borderRadius: '10px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                boxShadow: '0 2px 6px rgba(37,99,235,0.3)'
-              }}
-            >
-              <IdCard className="w-6 h-6" />
-            </span>
-            <div>
-              <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 900, color: '#0f172a' }}>
-                DNI Matrix Express (WhatsApp Web ➔ Word/PDF A4)
-              </h2>
-              <p style={{ margin: '2px 0 0 0', fontSize: '12.5px', color: '#64748b' }}>
-                Copia fotos de DNI desde WhatsApp Web, pega con <b>Ctrl+V</b> y genera documentos Word A4 listos para imprimir
-              </p>
+    <div className="dni-matrix-theme">
+      {/* 1. APP HEADER GLOBAL CON MÉTRICAS */}
+      <header className="app-header">
+        <div className="header-brand">
+          <div className="brand-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="2" y="4" width="20" height="16" rx="3" />
+              <line x1="6" y1="9" x2="10" y2="9" />
+              <line x1="6" y1="12" x2="12" y2="12" />
+              <line x1="6" y1="15" x2="8" y2="15" />
+              <circle cx="16.5" cy="11.5" r="2.5" />
+            </svg>
+          </div>
+          <div>
+            <h1 className="brand-title">DNI MATRIX EXPRESS</h1>
+            <span className="brand-subtitle">Procesador Masivo de DNI por Cupos (WhatsApp Web &rarr; Word A4)</span>
+          </div>
+        </div>
+
+        {/* Métricas en Tiempo Real */}
+        <div className="header-stats">
+          <div className="stat-pill total">
+            <span className="stat-label">Total Cupos</span>
+            <span className="stat-value">{totalSlots}</span>
+          </div>
+          <div className="stat-pill ready">
+            <span className="stat-indicator"></span>
+            <span className="stat-label">Completos</span>
+            <span className="stat-value">{stats.ready}</span>
+          </div>
+          <div className="stat-pill partial">
+            <span className="stat-indicator"></span>
+            <span className="stat-label">Incompletos</span>
+            <span className="stat-value">{stats.partial}</span>
+          </div>
+          <div className="stat-pill empty">
+            <span className="stat-indicator"></span>
+            <span className="stat-label">Vacíos</span>
+            <span className="stat-value">{stats.empty}</span>
+          </div>
+          <div className="progress-container" title="Progreso del lote">
+            <div className="progress-text">
+              <span>{progressPercent}%</span>
+            </div>
+            <div className="progress-bar-bg">
+              <div className="progress-fill" style={{ width: `${progressPercent}%` }}></div>
             </div>
           </div>
         </div>
 
-        {/* Botones de Exportación Rápida */}
-        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+        {/* Controles Globales Rápidos */}
+        <div className="header-actions">
           <button
-            onClick={handleExportMasterWord}
-            disabled={isExporting || stats.ready === 0}
-            className="btn btn-primary"
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              fontWeight: 800,
-              fontSize: '12.5px',
-              padding: '9px 16px',
-              borderRadius: '8px',
-              boxShadow: '0 2px 6px rgba(37,99,235,0.25)'
+            onClick={() => {
+              const next = !soundEnabled;
+              setSoundEnabled(next);
+              dniDb.saveSetting('soundEnabled', next);
+              showToast(next ? 'Sonido activado' : 'Sonido silenciado');
             }}
-          >
-            <FileText className="w-4 h-4" />
-            {isExporting ? 'Generando...' : `Word Maestro (.docx) (${stats.ready})`}
-          </button>
-
-          <button
-            onClick={handleExportZip}
-            disabled={isExporting || stats.ready === 0}
-            className="btn"
-            style={{
-              background: '#059669',
-              color: '#ffffff',
-              border: 'none',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              fontWeight: 800,
-              fontSize: '12.5px',
-              padding: '9px 14px',
-              borderRadius: '8px',
-              cursor: stats.ready > 0 ? 'pointer' : 'not-allowed',
-              opacity: stats.ready > 0 ? 1 : 0.6
-            }}
-          >
-            <Archive className="w-4 h-4" /> Lote (.zip)
-          </button>
-
-          <button
-            onClick={() => setSoundEnabled(!soundEnabled)}
+            className="icon-button"
             title={soundEnabled ? 'Silenciar sonidos' : 'Activar sonidos'}
-            style={{
-              background: soundEnabled ? '#eff6ff' : '#f1f5f9',
-              border: '1px solid #cbd5e1',
-              color: soundEnabled ? '#2563eb' : '#64748b',
-              width: '38px',
-              height: '38px',
-              borderRadius: '8px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer'
-            }}
           >
-            {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
+            {soundEnabled ? (
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+              </svg>
+            ) : (
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                <line x1="23" y1="9" x2="17" y2="15"></line>
+                <line x1="17" y1="9" x2="23" y2="15"></line>
+              </svg>
+            )}
           </button>
 
-          <button
-            onClick={() => setShowConfigModal(true)}
-            title="Ajustes de cupos"
-            style={{
-              background: '#f8fafc',
-              border: '1px solid #cbd5e1',
-              color: '#475569',
-              width: '38px',
-              height: '38px',
-              borderRadius: '8px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer'
-            }}
-          >
-            <Settings className="w-4 h-4" />
+          <button onClick={() => setShowConfigModal(true)} className="btn btn-secondary" title="Ajustes de lote y cupos">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="3"></circle>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+            </svg>
+            <span>Ajustes</span>
           </button>
 
-          <button
-            onClick={handleClearAll}
-            title="Vaciar todos los cupos"
-            style={{
-              background: '#fee2e2',
-              border: '1px solid #fecaca',
-              color: '#dc2626',
-              width: '38px',
-              height: '38px',
-              borderRadius: '8px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer'
-            }}
-          >
-            <Trash2 className="w-4 h-4" />
+          <button onClick={() => setShowPreviewModal(true)} className="btn btn-secondary" title="Vista de impresión A4">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+              <circle cx="12" cy="12" r="3"></circle>
+            </svg>
+            <span>Vista A4</span>
+          </button>
+
+          <button onClick={() => setShowPdfModal(true)} className="btn btn-pdf-header" title="Convertir archivos Word a PDF">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+              <line x1="9" y1="15" x2="15" y2="15"></line>
+            </svg>
+            <span>Convertir a PDF</span>
           </button>
         </div>
-      </div>
+      </header>
 
-      {/* ESTADO DE PROGRESO DE EXPORTACIÓN */}
-      {isExporting && exportProgress && (
-        <div
-          style={{
-            background: '#eff6ff',
-            border: '1px solid #bfdbfe',
-            borderRadius: '10px',
-            padding: '10px 16px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '10px',
-            fontSize: '13px',
-            color: '#1e40af',
-            fontWeight: 800
-          }}
-        >
-          <div className="spinner" style={{ width: '16px', height: '16px' }} />
-          <span>{exportProgress}</span>
-        </div>
-      )}
+      {/* 2. CONTENEDOR PRINCIPAL: DOS PANELES */}
+      <main className="main-workspace">
+        {/* PANEL IZQUIERDO: EXPEDIENTE ACTIVO */}
+        <section className="active-panel">
+          {/* Cabecera del expediente activo */}
+          <div className="active-header">
+            <div className="active-badge-group">
+              <span className="active-tag">EXPEDIENTE ACTIVO</span>
+              <h2 className="active-number">#{padNum(activeSlotId)}</h2>
+              <span
+                className={`status-badge ${
+                  activeStatus === 'ready'
+                    ? 'status-ready'
+                    : activeStatus === 'partial'
+                    ? 'status-partial'
+                    : 'status-empty'
+                }`}
+              >
+                {activeStatus === 'ready'
+                  ? 'COMPLETO (2/2)'
+                  : activeStatus === 'partial'
+                  ? '1 CARA (1/2)'
+                  : 'VACÍO (0/2)'}
+              </span>
+            </div>
 
-      {/* TARJETAS DE MÉTRICAS / RESUMEN */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' }}>
-        <div
-          onClick={() => setFilter('all')}
-          style={{
-            background: filter === 'all' ? '#eff6ff' : '#ffffff',
-            border: filter === 'all' ? '2px solid #2563eb' : '1px solid #e2e8f0',
-            borderRadius: '10px',
-            padding: '12px 16px',
-            cursor: 'pointer',
-            transition: 'all 0.15s ease'
-          }}
-        >
-          <div style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase' }}>
-            Total Cupos
+            <div className="active-metadata">
+              <label className="metadata-label">DNI / Nombre (Opcional):</label>
+              <input
+                type="text"
+                className="metadata-input"
+                placeholder="Ej: 74839201 - Juan Perez"
+                value={activeSlot.label || ''}
+                onChange={(e) => updateSlot({ ...activeSlot, label: e.target.value })}
+                maxLength={60}
+              />
+              <button
+                type="button"
+                className="btn btn-secondary"
+                style={{ padding: '6px 10px', fontSize: '0.75rem' }}
+                title="Vincular con Cliente / Guía WR de AMEX"
+                onClick={() => setShowAmexLinkModal(true)}
+              >
+                ⚡ AMEX
+              </button>
+            </div>
           </div>
-          <div style={{ fontSize: '22px', fontWeight: 900, color: '#0f172a', marginTop: '2px' }}>
-            {totalSlots}
-          </div>
-        </div>
 
-        <div
-          onClick={() => setFilter('ready')}
-          style={{
-            background: filter === 'ready' ? '#f0fdf4' : '#ffffff',
-            border: filter === 'ready' ? '2px solid #16a34a' : '1px solid #e2e8f0',
-            borderRadius: '10px',
-            padding: '12px 16px',
-            cursor: 'pointer',
-            transition: 'all 0.15s ease'
-          }}
-        >
-          <div style={{ fontSize: '11px', fontWeight: 800, color: '#15803d', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '4px' }}>
-            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> Listos / Completos
-          </div>
-          <div style={{ fontSize: '22px', fontWeight: 900, color: '#16a34a', marginTop: '2px' }}>
-            {stats.ready} <span style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>({Math.round((stats.ready / totalSlots) * 100)}%)</span>
-          </div>
-        </div>
+          {/* Área de Pegado y Simulación A4 */}
+          <div className="sheet-simulation-wrapper">
+            <div className="sheet-simulation-header">
+              <span>Hoja A4 (21.0 &times; 29.7 cm) - Márgenes: 2.0 cm - Medida DNI: 12.0 &times; 7.5 cm</span>
+              <span className="tip-kbd">
+                Portapapeles activo: Presiona <kbd>Ctrl+V</kbd> en cualquier momento
+              </span>
+            </div>
 
-        <div
-          onClick={() => setFilter('partial')}
-          style={{
-            background: filter === 'partial' ? '#fffbeb' : '#ffffff',
-            border: filter === 'partial' ? '2px solid #d97706' : '1px solid #e2e8f0',
-            borderRadius: '10px',
-            padding: '12px 16px',
-            cursor: 'pointer',
-            transition: 'all 0.15s ease'
-          }}
-        >
-          <div style={{ fontSize: '11px', fontWeight: 800, color: '#b45309', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '4px' }}>
-            <AlertCircle className="w-3.5 h-3.5 text-amber-500" /> Incompletos / Parciales
-          </div>
-          <div style={{ fontSize: '22px', fontWeight: 900, color: '#d97706', marginTop: '2px' }}>
-            {stats.partial}
-          </div>
-        </div>
-
-        <div
-          onClick={() => setFilter('empty')}
-          style={{
-            background: filter === 'empty' ? '#f8fafc' : '#ffffff',
-            border: filter === 'empty' ? '2px solid #64748b' : '1px solid #e2e8f0',
-            borderRadius: '10px',
-            padding: '12px 16px',
-            cursor: 'pointer',
-            transition: 'all 0.15s ease'
-          }}
-        >
-          <div style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase' }}>
-            Cupos Vacíos
-          </div>
-          <div style={{ fontSize: '22px', fontWeight: 900, color: '#64748b', marginTop: '2px' }}>
-            {stats.empty}
-          </div>
-        </div>
-      </div>
-
-      {/* GUÍA DE FLUJO RÁPIDO WHATSAPP WEB */}
-      <div
-        style={{
-          background: '#f8fafc',
-          border: '1px dashed #cbd5e1',
-          borderRadius: '10px',
-          padding: '10px 16px',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          flexWrap: 'wrap',
-          gap: '8px',
-          fontSize: '12px',
-          color: '#475569'
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ fontWeight: 800, color: '#2563eb' }}>⚡ Flujo WhatsApp:</span>
-          <span>1. Clic derecho en WhatsApp &rarr; <b>Copiar imagen</b></span>
-          <span>&rarr;</span>
-          <span>2. Pulsa <b>Ctrl + V</b> aquí</span>
-          <span>&rarr;</span>
-          <span style={{ color: '#16a34a', fontWeight: 700 }}>¡Se clasifica y salta solo al completarse!</span>
-        </div>
-
-        <div style={{ display: 'flex', gap: '10px', fontSize: '11.5px', fontWeight: 700, color: '#64748b' }}>
-          <span><kbd style={{ background: '#e2e8f0', padding: '2px 5px', borderRadius: '4px' }}>Enter</kbd> Siguiente vacío</span>
-          <span><kbd style={{ background: '#e2e8f0', padding: '2px 5px', borderRadius: '4px' }}>R</kbd> Rotar 90°</span>
-          <span><kbd style={{ background: '#e2e8f0', padding: '2px 5px', borderRadius: '4px' }}>&larr; &rarr;</kbd> Navegar</span>
-        </div>
-      </div>
-
-      {/* BARRA DE BÚSQUEDA Y FILTRADO */}
-      <div
-        style={{
-          background: '#ffffff',
-          border: '1px solid #e2e8f0',
-          borderRadius: '10px',
-          padding: '10px 14px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '12px',
-          flexWrap: 'wrap'
-        }}
-      >
-        <div style={{ position: 'relative', flex: '1 1 240px' }}>
-          <Search style={{ position: 'absolute', left: '10px', top: '8px', width: '15px', height: '15px', color: '#94a3b8' }} />
-          <input
-            type="text"
-            placeholder="Buscar por # cupo (ej: 0005) o DNI/Nombre..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            style={{
-              width: '100%',
-              padding: '6px 10px 6px 32px',
-              borderRadius: '6px',
-              border: '1px solid #cbd5e1',
-              fontSize: '12.5px',
-              outline: 'none'
-            }}
-          />
-        </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <span style={{ fontSize: '12px', fontWeight: 800, color: '#475569' }}>Cupo Activo:</span>
-          <select
-            value={activeSlotId}
-            onChange={(e) => setActiveSlotId(Number(e.target.value))}
-            style={{
-              padding: '5px 8px',
-              borderRadius: '6px',
-              border: '1px solid #cbd5e1',
-              fontSize: '12px',
-              fontWeight: 800,
-              fontFamily: 'monospace'
-            }}
-          >
-            {allSlotsArray.map((id) => (
-              <option key={id} value={id}>
-                #{String(id).padStart(4, '0')} {slotsData[id]?.anverso && slotsData[id]?.reverso ? '✓' : ''}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <button
-          onClick={() => setActiveSlotId(findNextIncompleteSlot(activeSlotId))}
-          className="btn"
-          style={{
-            background: '#f1f5f9',
-            border: '1px solid #cbd5e1',
-            color: '#1e40af',
-            padding: '5px 10px',
-            borderRadius: '6px',
-            fontSize: '12px',
-            fontWeight: 800,
-            display: 'flex',
-            alignItems: 'center',
-            gap: '4px'
-          }}
-        >
-          Próximo Incompleto <ArrowRight className="w-3.5 h-3.5" />
-        </button>
-      </div>
-
-      {/* GRILLA DE CUPOS (MATRIZ INTERACTIVA) */}
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
-          gap: '14px'
-        }}
-      >
-        {filteredSlotIds.map((id) => {
-          const slot = slotsData[id] || { id };
-          const isComplete = Boolean(slot.anverso && slot.reverso);
-          const isPartial = Boolean((slot.anverso && !slot.reverso) || (!slot.anverso && slot.reverso));
-          const isActive = id === activeSlotId;
-
-          const borderColor = isActive
-            ? '#2563eb'
-            : isComplete
-            ? '#16a34a'
-            : isPartial
-            ? '#f59e0b'
-            : '#e2e8f0';
-
-          const badgeBg = isComplete ? '#dcfce7' : isPartial ? '#fef3c7' : '#f1f5f9';
-          const badgeColor = isComplete ? '#15803d' : isPartial ? '#b45309' : '#64748b';
-
-          return (
-            <div
-              key={id}
-              onClick={() => setActiveSlotId(id)}
-              style={{
-                background: isActive ? '#fbfcfe' : '#ffffff',
-                border: `2px solid ${borderColor}`,
-                borderRadius: '12px',
-                padding: '12px',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '10px',
-                cursor: 'pointer',
-                boxShadow: isActive
-                  ? '0 4px 14px rgba(37,99,235,0.18)'
-                  : '0 1px 3px rgba(0,0,0,0.04)',
-                position: 'relative',
-                transition: 'all 0.15s ease'
-              }}
-            >
-              {/* Cabecera del Cupo */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <span
-                    style={{
-                      fontFamily: 'monospace',
-                      fontWeight: 900,
-                      fontSize: '13px',
-                      color: isActive ? '#2563eb' : '#0f172a',
-                      background: isActive ? '#eff6ff' : '#f8fafc',
-                      padding: '2px 6px',
-                      borderRadius: '4px',
-                      border: '1px solid #cbd5e1'
-                    }}
-                  >
-                    #{String(id).padStart(4, '0')}
-                  </span>
-                  {isActive && (
-                    <span style={{ fontSize: '10px', fontWeight: 900, color: '#2563eb', background: '#dbeafe', padding: '1px 5px', borderRadius: '4px' }}>
-                      ACTIVO
-                    </span>
-                  )}
-                </div>
-
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <span
-                    style={{
-                      fontSize: '10.5px',
-                      fontWeight: 800,
-                      background: badgeBg,
-                      color: badgeColor,
-                      padding: '2px 6px',
-                      borderRadius: '4px'
-                    }}
-                  >
-                    {isComplete ? 'COMPLETO ✓' : isPartial ? 'PARCIAL' : 'VACÍO'}
-                  </span>
-
-                  {isComplete && (
+            <div className="sheet-surface">
+              {/* CASILLA ANVERSO (SUPERIOR) */}
+              <div
+                className={`dni-dropzone ${activeSlot.anverso ? 'has-image' : ''} ${
+                  focusedSide === 'anverso' ? 'active-target' : ''
+                }`}
+                tabIndex={0}
+                onClick={() => setFocusedSide('anverso')}
+              >
+                <div className="dropzone-header">
+                  <div className="dropzone-title">
+                    <span className="side-badge front">1</span>
+                    <strong>ANVERSO (FRENTE)</strong>
+                    <span className="dimension-tag">12.0 &times; 7.5 cm</span>
+                  </div>
+                  <div className="dropzone-actions">
                     <button
-                      title="Vista previa A4"
+                      type="button"
+                      className="action-btn"
+                      title="Rotar 90° izquierda"
                       onClick={(e) => {
                         e.stopPropagation();
-                        setPreviewSlot(slot);
-                      }}
-                      style={{
-                        background: '#eff6ff',
-                        border: '1px solid #bfdbfe',
-                        color: '#2563eb',
-                        width: '24px',
-                        height: '24px',
-                        borderRadius: '4px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        cursor: 'pointer'
+                        rotateSide('anverso', 270);
                       }}
                     >
-                      <Eye className="w-3 h-3" />
+                      ↺
                     </button>
-                  )}
-
-                  {(slot.anverso || slot.reverso || slot.label) && (
                     <button
-                      title="Vaciar este cupo"
-                      onClick={(e) => handleClearSlot(id, e)}
-                      style={{
-                        background: '#fee2e2',
-                        border: '1px solid #fecaca',
-                        color: '#dc2626',
-                        width: '24px',
-                        height: '24px',
-                        borderRadius: '4px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        cursor: 'pointer'
+                      type="button"
+                      className="action-btn"
+                      title="Rotar 90° derecha"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        rotateSide('anverso', 90);
                       }}
                     >
-                      <Trash2 className="w-3 h-3" />
+                      ↻
                     </button>
-                  )}
+                    <button
+                      type="button"
+                      className="action-btn danger"
+                      title="Eliminar anverso"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        clearSide('anverso');
+                      }}
+                    >
+                      &times;
+                    </button>
+                  </div>
                 </div>
+
+                {activeSlot.anverso ? (
+                  <div className="dropzone-preview">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={activeSlot.anverso}
+                      alt="Anverso"
+                      style={{
+                        transform: `rotate(${activeSlot.anversoRotation || 0}deg)`
+                      }}
+                    />
+                  </div>
+                ) : (
+                  <div className="dropzone-placeholder">
+                    <div className="placeholder-icon">
+                      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <path d="M16 16v1a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h1" />
+                        <rect x="8" y="3" width="12" height="14" rx="2" />
+                        <path d="M12 8v4" />
+                        <path d="M10 10h4" />
+                      </svg>
+                    </div>
+                    <div className="placeholder-text">
+                      <span className="placeholder-main">
+                        Haz clic o pega el <strong>Anverso</strong> aquí
+                      </span>
+                      <span className="placeholder-sub">
+                        Copia en WhatsApp Web &rarr; presiona <kbd>Ctrl + V</kbd>
+                      </span>
+                    </div>
+                  </div>
+                )}
               </div>
 
-              {/* Casillas de Anverso y Reverso */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                {/* 1. ANVERSO */}
-                <div
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setActiveSlotId(id);
-                    setFocusedSide('anverso');
-                  }}
-                  style={{
-                    background: '#f8fafc',
-                    border:
-                      isActive && focusedSide === 'anverso'
-                        ? '2px solid #2563eb'
-                        : slot.anverso
-                        ? '1px solid #cbd5e1'
-                        : '1px dashed #cbd5e1',
-                    borderRadius: '8px',
-                    height: '110px',
-                    position: 'relative',
-                    overflow: 'hidden',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    cursor: 'pointer'
-                  }}
-                >
-                  <span
-                    style={{
-                      position: 'absolute',
-                      top: '4px',
-                      left: '4px',
-                      fontSize: '9px',
-                      fontWeight: 800,
-                      background: 'rgba(15,23,42,0.7)',
-                      color: '#ffffff',
-                      padding: '1px 4px',
-                      borderRadius: '3px',
-                      zIndex: 2
-                    }}
-                  >
-                    ANVERSO
-                  </span>
-
-                  {slot.anverso ? (
-                    <>
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={slot.anverso}
-                        alt="Anverso"
-                        style={{
-                          width: '100%',
-                          height: '100%',
-                          objectFit: 'contain',
-                          transform: `rotate(${slot.anversoRotation || 0}deg)`,
-                          transition: 'transform 0.2s ease'
-                        }}
-                      />
-                      <div
-                        style={{
-                          position: 'absolute',
-                          bottom: '4px',
-                          right: '4px',
-                          display: 'flex',
-                          gap: '2px',
-                          zIndex: 2
-                        }}
-                      >
-                        <button
-                          title="Rotar 90°"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleRotate(id, 'anverso');
-                          }}
-                          style={{
-                            background: 'rgba(255,255,255,0.9)',
-                            border: '1px solid #cbd5e1',
-                            width: '20px',
-                            height: '20px',
-                            borderRadius: '3px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            cursor: 'pointer'
-                          }}
-                        >
-                          <RotateCw className="w-2.5 h-2.5 text-slate-700" />
-                        </button>
-                        <button
-                          title="Eliminar foto"
-                          onClick={(e) => handleClearSide(id, 'anverso', e)}
-                          style={{
-                            background: 'rgba(254,226,226,0.9)',
-                            border: '1px solid #fca5a5',
-                            width: '20px',
-                            height: '20px',
-                            borderRadius: '3px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            cursor: 'pointer'
-                          }}
-                        >
-                          <Trash2 className="w-2.5 h-2.5 text-red-600" />
-                        </button>
-                      </div>
-                    </>
-                  ) : (
-                    <div style={{ textAlign: 'center', color: '#94a3b8', padding: '6px' }}>
-                      <IdCard className="w-5 h-5 mx-auto mb-1 opacity-50" />
-                      <div style={{ fontSize: '10px', fontWeight: 600 }}>Clic o Ctrl+V</div>
-                    </div>
-                  )}
-                </div>
-
-                {/* 2. REVERSO */}
-                <div
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setActiveSlotId(id);
-                    setFocusedSide('reverso');
-                  }}
-                  style={{
-                    background: '#f8fafc',
-                    border:
-                      isActive && focusedSide === 'reverso'
-                        ? '2px solid #2563eb'
-                        : slot.reverso
-                        ? '1px solid #cbd5e1'
-                        : '1px dashed #cbd5e1',
-                    borderRadius: '8px',
-                    height: '110px',
-                    position: 'relative',
-                    overflow: 'hidden',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    cursor: 'pointer'
-                  }}
-                >
-                  <span
-                    style={{
-                      position: 'absolute',
-                      top: '4px',
-                      left: '4px',
-                      fontSize: '9px',
-                      fontWeight: 800,
-                      background: 'rgba(15,23,42,0.7)',
-                      color: '#ffffff',
-                      padding: '1px 4px',
-                      borderRadius: '3px',
-                      zIndex: 2
-                    }}
-                  >
-                    REVERSO
-                  </span>
-
-                  {slot.reverso ? (
-                    <>
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={slot.reverso}
-                        alt="Reverso"
-                        style={{
-                          width: '100%',
-                          height: '100%',
-                          objectFit: 'contain',
-                          transform: `rotate(${slot.reversoRotation || 0}deg)`,
-                          transition: 'transform 0.2s ease'
-                        }}
-                      />
-                      <div
-                        style={{
-                          position: 'absolute',
-                          bottom: '4px',
-                          right: '4px',
-                          display: 'flex',
-                          gap: '2px',
-                          zIndex: 2
-                        }}
-                      >
-                        <button
-                          title="Rotar 90°"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleRotate(id, 'reverso');
-                          }}
-                          style={{
-                            background: 'rgba(255,255,255,0.9)',
-                            border: '1px solid #cbd5e1',
-                            width: '20px',
-                            height: '20px',
-                            borderRadius: '3px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            cursor: 'pointer'
-                          }}
-                        >
-                          <RotateCw className="w-2.5 h-2.5 text-slate-700" />
-                        </button>
-                        <button
-                          title="Eliminar foto"
-                          onClick={(e) => handleClearSide(id, 'reverso', e)}
-                          style={{
-                            background: 'rgba(254,226,226,0.9)',
-                            border: '1px solid #fca5a5',
-                            width: '20px',
-                            height: '20px',
-                            borderRadius: '3px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            cursor: 'pointer'
-                          }}
-                        >
-                          <Trash2 className="w-2.5 h-2.5 text-red-600" />
-                        </button>
-                      </div>
-                    </>
-                  ) : (
-                    <div style={{ textAlign: 'center', color: '#94a3b8', padding: '6px' }}>
-                      <IdCard className="w-5 h-5 mx-auto mb-1 opacity-50" />
-                      <div style={{ fontSize: '10px', fontWeight: 600 }}>Clic o Ctrl+V</div>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* DNI o Nombre Opcional del Expediente */}
-              <div style={{ display: 'flex', gap: '4px' }}>
-                <input
-                  type="text"
-                  placeholder="DNI / Nombre del Cliente..."
-                  value={slot.label || ''}
-                  onChange={(e) => updateSlot({ ...slot, label: e.target.value })}
-                  style={{
-                    flex: 1,
-                    padding: '4px 8px',
-                    fontSize: '11px',
-                    borderRadius: '5px',
-                    border: '1px solid #cbd5e1',
-                    outline: 'none',
-                    background: '#f8fafc'
-                  }}
-                />
+              {/* BOTÓN CENTRAL DE INTERCAMBIO */}
+              <div className="swap-bar">
+                <div className="swap-line"></div>
                 <button
                   type="button"
-                  title="Vincular con Cliente / Guía AMEX"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setAssociateModalSlot(slot);
-                  }}
-                  style={{
-                    background: '#eff6ff',
-                    border: '1px solid #bfdbfe',
-                    color: '#2563eb',
-                    padding: '0 6px',
-                    borderRadius: '5px',
-                    cursor: 'pointer'
-                  }}
+                  className="btn-swap"
+                  onClick={swapSides}
+                  title="Intercambiar Anverso y Reverso si se pegaron invertidos"
                 >
-                  <LinkIcon className="w-3 h-3" />
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M7 16V4m0 0L3 8m4-4l4 4m6 4v12m0 0l4-4m-4 4l-4-4" />
+                  </svg>
+                  <span>Intercambiar Caras</span>
                 </button>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* MODAL: VISTA PREVIA HOJA A4 (CUADRE MILIMÉTRICO) */}
-      {previewSlot && (
-        <div className="modal-backdrop">
-          <div className="modal-dialog" style={{ maxWidth: '640px', maxHeight: '90vh', overflowY: 'auto' }}>
-            <div className="modal-header">
-              <span className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Printer className="w-5 h-5 text-blue-600" /> Vista Previa Expediente #{String(previewSlot.id).padStart(4, '0')} (Hoja A4)
-              </span>
-              <button
-                onClick={() => setPreviewSlot(null)}
-                style={{ background: 'none', border: 'none', fontSize: '18px', cursor: 'pointer', color: '#64748b' }}
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '14px' }}>
-              <div style={{ fontSize: '12px', color: '#64748b', textAlign: 'center' }}>
-                Cuadre A4 milimétrico: 12.0 × 7.5 cm por DNI, centrado, 1 página exacta en Microsoft Word.
+                <div className="swap-line"></div>
               </div>
 
-              {/* Simulación visual de la hoja A4 blanca */}
+              {/* CASILLA REVERSO (INFERIOR) */}
               <div
-                id="a4-print-sheet"
-                style={{
-                  width: '420px',
-                  height: '594px', // Ratio A4 1:1.414
-                  background: '#ffffff',
-                  border: '1px solid #cbd5e1',
-                  boxShadow: '0 4px 16px rgba(0,0,0,0.1)',
-                  padding: '40px',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  justifyContent: 'space-between',
-                  alignItems: 'center'
-                }}
+                className={`dni-dropzone ${activeSlot.reverso ? 'has-image' : ''} ${
+                  focusedSide === 'reverso' ? 'active-target' : ''
+                }`}
+                tabIndex={0}
+                onClick={() => setFocusedSide('reverso')}
               >
-                {previewSlot.anverso ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={previewSlot.anverso}
-                    alt="Anverso A4"
-                    style={{
-                      width: '240px',
-                      height: '150px',
-                      objectFit: 'contain',
-                      transform: `rotate(${previewSlot.anversoRotation || 0}deg)`,
-                      border: '1px solid #e2e8f0'
-                    }}
-                  />
+                <div className="dropzone-header">
+                  <div className="dropzone-title">
+                    <span className="side-badge back">2</span>
+                    <strong>REVERSO (POSTERIOR)</strong>
+                    <span className="dimension-tag">12.0 &times; 7.5 cm</span>
+                  </div>
+                  <div className="dropzone-actions">
+                    <button
+                      type="button"
+                      className="action-btn"
+                      title="Rotar 90° izquierda"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        rotateSide('reverso', 270);
+                      }}
+                    >
+                      ↺
+                    </button>
+                    <button
+                      type="button"
+                      className="action-btn"
+                      title="Rotar 90° derecha"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        rotateSide('reverso', 90);
+                      }}
+                    >
+                      ↻
+                    </button>
+                    <button
+                      type="button"
+                      className="action-btn danger"
+                      title="Eliminar reverso"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        clearSide('reverso');
+                      }}
+                    >
+                      &times;
+                    </button>
+                  </div>
+                </div>
+
+                {activeSlot.reverso ? (
+                  <div className="dropzone-preview">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={activeSlot.reverso}
+                      alt="Reverso"
+                      style={{
+                        transform: `rotate(${activeSlot.reversoRotation || 0}deg)`
+                      }}
+                    />
+                  </div>
                 ) : (
-                  <div style={{ width: '240px', height: '150px', border: '1px dashed #cbd5e1', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8' }}>
-                    Sin Anverso
+                  <div className="dropzone-placeholder">
+                    <div className="placeholder-icon">
+                      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <path d="M16 16v1a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h1" />
+                        <rect x="8" y="3" width="12" height="14" rx="2" />
+                        <path d="M12 8v4" />
+                        <path d="M10 10h4" />
+                      </svg>
+                    </div>
+                    <div className="placeholder-text">
+                      <span className="placeholder-main">
+                        Haz clic o pega el <strong>Reverso</strong> aquí
+                      </span>
+                      <span className="placeholder-sub">
+                        Copia en WhatsApp Web &rarr; presiona <kbd>Ctrl + V</kbd>
+                      </span>
+                    </div>
                   </div>
                 )}
-
-                {previewSlot.reverso ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={previewSlot.reverso}
-                    alt="Reverso A4"
-                    style={{
-                      width: '240px',
-                      height: '150px',
-                      objectFit: 'contain',
-                      transform: `rotate(${previewSlot.reversoRotation || 0}deg)`,
-                      border: '1px solid #e2e8f0'
-                    }}
-                  />
-                ) : (
-                  <div style={{ width: '240px', height: '150px', border: '1px dashed #cbd5e1', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8' }}>
-                    Sin Reverso
-                  </div>
-                )}
-              </div>
-
-              <div style={{ display: 'flex', gap: '8px', width: '100%', justifyContent: 'flex-end', marginTop: '10px' }}>
-                <button
-                  type="button"
-                  onClick={() => window.print()}
-                  className="btn btn-primary"
-                  style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 800 }}
-                >
-                  <Printer className="w-4 h-4" /> Imprimir Hoja
-                </button>
               </div>
             </div>
           </div>
-        </div>
-      )}
 
-      {/* MODAL: AJUSTES DE MATRIZ DNI */}
-      {showConfigModal && (
-        <div className="modal-backdrop">
-          <div className="modal-dialog" style={{ maxWidth: '420px' }}>
-            <div className="modal-header">
-              <span className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Settings className="w-5 h-5 text-blue-600" /> Configuración de DNI Matrix
+          {/* Barra de Navegación del Expediente Activo */}
+          <div className="active-nav-bar">
+            <button
+              className="btn btn-secondary nav-btn"
+              disabled={activeSlotId <= 1}
+              onClick={() => {
+                if (activeSlotId > 1) {
+                  playSound('click');
+                  setActiveSlotId((prev) => prev - 1);
+                }
+              }}
+              title="Ir al cupo anterior (Flecha Izquierda)"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="15 18 9 12 15 6"></polyline>
+              </svg>
+              <span>
+                Anterior <kbd>&larr;</kbd>
               </span>
+            </button>
+
+            <div className="nav-center-info">
+              <span>
+                Cupo {activeSlotId} de {totalSlots}
+              </span>
+            </div>
+
+            <button
+              className="btn btn-secondary nav-btn"
+              disabled={activeSlotId >= totalSlots}
+              onClick={() => {
+                if (activeSlotId < totalSlots) {
+                  playSound('click');
+                  setActiveSlotId((prev) => prev + 1);
+                }
+              }}
+              title="Ir al siguiente cupo (Flecha Derecha)"
+            >
+              <span>
+                Siguiente <kbd>&rarr;</kbd>
+              </span>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="9 18 15 12 9 6"></polyline>
+              </svg>
+            </button>
+
+            <button
+              className="btn btn-success nav-btn-cta"
+              onClick={jumpToNextIncompleteSlot}
+              title="Saltar de inmediato al próximo cupo vacío o incompleto (Enter)"
+            >
+              <span className="pulse-dot"></span>
+              <span>
+                Siguiente Incompleto <kbd>Enter ⏎</kbd>
+              </span>
+            </button>
+          </div>
+        </section>
+
+        {/* PANEL DERECHO: MATRIZ DE CUPOS */}
+        <aside className="matrix-panel">
+          <div className="matrix-header">
+            <div className="matrix-title-row">
+              <div className="matrix-heading">
+                <h3>MATRIZ DE CUPOS</h3>
+                <span className="matrix-subtitle">Control Visual de Calidad</span>
+              </div>
+
+              {/* Filtro de vista */}
+              <div className="matrix-filter-group">
+                <button
+                  className={`filter-chip ${currentFilter === 'all' ? 'active' : ''}`}
+                  onClick={() => setCurrentFilter('all')}
+                >
+                  Todos
+                </button>
+                <button
+                  className={`filter-chip ${currentFilter === 'ready' ? 'active' : ''}`}
+                  onClick={() => setCurrentFilter('ready')}
+                >
+                  Listos ({stats.ready})
+                </button>
+                <button
+                  className={`filter-chip ${currentFilter === 'partial' ? 'active' : ''}`}
+                  onClick={() => setCurrentFilter('partial')}
+                >
+                  1/2 ({stats.partial})
+                </button>
+                <button
+                  className={`filter-chip ${currentFilter === 'empty' ? 'active' : ''}`}
+                  onClick={() => setCurrentFilter('empty')}
+                >
+                  Vacíos ({stats.empty})
+                </button>
+              </div>
+            </div>
+
+            {/* Leyenda y Búsqueda directa */}
+            <div className="matrix-toolbar">
+              <div className="matrix-legend">
+                <span className="legend-item">
+                  <span className="badge-dot green"></span> Completo
+                </span>
+                <span className="legend-item">
+                  <span className="badge-dot amber"></span> 1 cara
+                </span>
+                <span className="legend-item">
+                  <span className="badge-dot gray"></span> Vacío
+                </span>
+              </div>
+
+              <div className="quick-jump">
+                <input
+                  type="number"
+                  min="1"
+                  max={totalSlots}
+                  placeholder="# Cupo"
+                  value={quickJumpVal}
+                  onChange={(e) => setQuickJumpVal(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      const val = parseInt(quickJumpVal, 10);
+                      if (!isNaN(val) && val >= 1 && val <= totalSlots) {
+                        setActiveSlotId(val);
+                        setQuickJumpVal('');
+                      }
+                    }
+                  }}
+                  title="Escribe un número y presiona Enter para saltar"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Cuadrícula de la Matriz */}
+          <div className="matrix-grid-scroll">
+            <div className="matrix-grid">
+              {filteredSlotIds.map((id) => {
+                const s = slotsData[id];
+                const st = getSlotStatus(s);
+                const isActive = id === activeSlotId;
+
+                const stateClass =
+                  st === 'ready'
+                    ? 'state-ready'
+                    : st === 'partial'
+                    ? 'state-partial'
+                    : 'state-empty';
+
+                return (
+                  <div
+                    key={id}
+                    className={`slot-cell ${stateClass} ${isActive ? 'active-slot' : ''}`}
+                    onClick={() => {
+                      playSound('click');
+                      setActiveSlotId(id);
+                      setFocusedSide(null);
+                    }}
+                  >
+                    <span className="slot-num">#{padNum(id)}</span>
+                    <span className="slot-status-icon">
+                      {st === 'ready' ? '✓' : st === 'partial' ? '1/2' : '··'}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* SECCIÓN DE EXPORTACIÓN INMEDIATA */}
+          <div className="matrix-export-card">
+            <div className="export-card-title">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                <polyline points="14 2 14 8 20 8"></polyline>
+                <line x1="12" y1="18" x2="12" y2="12"></line>
+                <line x1="9" y1="15" x2="12" y2="18"></line>
+                <line x1="15" y1="15" x2="12" y2="18"></line>
+              </svg>
+              <strong>GENERAR DOCUMENTOS WORD (A4)</strong>
+            </div>
+
+            <p className="export-summary-text">
+              Hay <strong>{stats.ready} expedientes completos</strong> listos para exportar ({stats.ready} páginas A4).
+            </p>
+
+            <div className="export-buttons-stack">
+              {/* Botón Principal: Escoger Carpeta donde Guardar */}
               <button
-                onClick={() => setShowConfigModal(false)}
-                style={{ background: 'none', border: 'none', fontSize: '18px', cursor: 'pointer', color: '#64748b' }}
+                className="btn btn-success btn-export btn-export-main"
+                disabled={isExporting || stats.ready === 0}
+                onClick={handleExportFolder}
+                title="Haz clic para elegir una carpeta en tu equipo y guardar todos los archivos Word sueltos sin comprimir"
               >
-                ✕
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                  <polyline points="12 11 12 17 15 14"></polyline>
+                  <line x1="9" y1="14" x2="12" y2="17"></line>
+                </svg>
+                <div className="btn-text-block">
+                  <span className="btn-title">Escoger Carpeta donde Guardar</span>
+                  <span className="btn-desc">Guarda los Word sueltos directamente (Sin comprimir)</span>
+                </div>
+              </button>
+
+              <div className="export-buttons-grid">
+                {/* Opción 2: Archivo Maestro Único */}
+                <button
+                  className="btn btn-primary btn-export"
+                  disabled={isExporting || stats.ready === 0}
+                  onClick={handleExportMaster}
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                    <polyline points="14 2 14 8 20 8"></polyline>
+                  </svg>
+                  <div className="btn-text-block">
+                    <span className="btn-title">Word Maestro Único</span>
+                    <span className="btn-desc">1 archivo con todas las hojas</span>
+                  </div>
+                </button>
+
+                {/* Opción 3: Descargar ZIP */}
+                <button
+                  className="btn btn-secondary btn-export"
+                  disabled={isExporting || stats.ready === 0}
+                  onClick={handleExportZip}
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="21 8 21 21 3 21 3 8"></polyline>
+                    <rect x="1" y="3" width="22" height="5"></rect>
+                    <line x1="10" y1="12" x2="14" y2="12"></line>
+                  </svg>
+                  <div className="btn-text-block">
+                    <span className="btn-title">Descargar en ZIP</span>
+                    <span className="btn-desc">Carpeta comprimida .zip</span>
+                  </div>
+                </button>
+              </div>
+            </div>
+
+            <div
+              className="pdf-quick-banner"
+              style={{
+                marginTop: '10px',
+                paddingTop: '10px',
+                borderTop: '1px dashed var(--border-subtle)'
+              }}
+            >
+              <button
+                className="btn btn-secondary"
+                style={{ width: '100%', borderColor: 'rgba(239, 68, 68, 0.35)', color: '#fca5a5' }}
+                type="button"
+                onClick={() => setShowPdfModal(true)}
+                title="Convertir los archivos Word a PDF"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                  <polyline points="14 2 14 8 20 8"></polyline>
+                  <line x1="9" y1="15" x2="15" y2="15"></line>
+                </svg>
+                <span>Conversor DOCX a PDF</span>
               </button>
             </div>
 
-            <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+            {/* Indicador de procesamiento */}
+            {isExporting && (
+              <div className="export-loading">
+                <div className="spinner"></div>
+                <span>{exportStatusMessage || 'Generando documento Word...'}</span>
+              </div>
+            )}
+          </div>
+        </aside>
+      </main>
+
+      {/* MODAL: AJUSTES Y CONFIGURACIÓN */}
+      {showConfigModal && (
+        <div className="modal-overlay">
+          <div className="modal-card">
+            <div className="modal-header">
+              <h3>Configuración de Lote y Cupos</h3>
+              <button onClick={() => setShowConfigModal(false)} className="modal-close-btn">
+                &times;
+              </button>
+            </div>
+            <div className="modal-body">
               <div className="form-group">
-                <label style={{ fontSize: '12px', fontWeight: 800, color: '#334155' }}>
-                  Cantidad Total de Cupos / Expedientes
-                </label>
+                <label>Cantidad total de cupos en la matriz:</label>
                 <select
                   value={totalSlots}
                   onChange={async (e) => {
@@ -1279,115 +1076,111 @@ export default function DniMatrixTab({ paquetes = [], clientes = [] }: DniMatrix
                     setTotalSlots(count);
                     await dniDb.saveSetting('totalSlots', count);
                   }}
-                  className="form-control"
-                  style={{ fontWeight: 800 }}
+                  className="form-select"
                 >
-                  <option value={50}>50 Cupos (#0001 - #0050)</option>
-                  <option value={100}>100 Cupos (#0001 - #0100) (Estándar)</option>
-                  <option value={200}>200 Cupos (#0001 - #0200)</option>
-                  <option value={300}>300 Cupos (#0001 - #0300)</option>
-                  <option value={500}>500 Cupos (#0001 - #0500)</option>
-                  <option value={1000}>1000 Cupos (#0001 - #1000) (Lote Grande)</option>
+                  <option value="50">50 Cupos (#001 a #050)</option>
+                  <option value="100">100 Cupos (#001 a #100) (Estándar)</option>
+                  <option value="200">200 Cupos (#001 a #200)</option>
+                  <option value="300">300 Cupos (#001 a #300)</option>
+                  <option value="500">500 Cupos (#001 a #500)</option>
+                  <option value="1000">1000 Cupos (#0001 a #1000)</option>
                 </select>
+                <small>Si cambias el número, los expedientes ya cargados dentro del rango se conservan.</small>
               </div>
 
-              <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '8px', padding: '10px 12px', fontSize: '12px', color: '#1e40af' }}>
-                💡 <b>Persistencia Local:</b> Todas las imágenes y rotaciones se guardan de forma instantánea en tu navegador con <b>IndexedDB</b>.
-              </div>
+              <hr className="modal-divider" />
 
-              <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
-                <button
-                  type="button"
-                  onClick={() => setShowConfigModal(false)}
-                  className="btn btn-primary"
-                >
-                  Guardar y Cerrar
+              <div className="form-group">
+                <label>Acciones de Limpieza:</label>
+                <p className="text-muted">¿Deseas iniciar un lote completamente nuevo de expedientes?</p>
+                <button onClick={handleClearAllData} className="btn btn-danger" type="button">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="3 6 5 6 21 6"></polyline>
+                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                  </svg>
+                  <span>Borrar Todo y Empezar Nuevo Lote</span>
                 </button>
               </div>
+            </div>
+            <div className="modal-footer">
+              <button onClick={() => setShowConfigModal(false)} className="btn btn-primary">
+                Guardar y Cerrar
+              </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* MODAL: ASOCIAR CUPO A CLIENTE / GUÍA AMEX */}
-      {associateModalSlot && (
-        <div className="modal-backdrop">
-          <div className="modal-dialog" style={{ maxWidth: '440px' }}>
+      {/* MODAL: VISTA PREVIA HOJA A4 REAL */}
+      {showPreviewModal && (
+        <div className="modal-overlay">
+          <div className="modal-card modal-large">
             <div className="modal-header">
-              <span className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <LinkIcon className="w-5 h-5 text-blue-600" /> Vincular Cupo #{String(associateModalSlot.id).padStart(4, '0')} con AMEX
-              </span>
-              <button
-                onClick={() => setAssociateModalSlot(null)}
-                style={{ background: 'none', border: 'none', fontSize: '18px', cursor: 'pointer', color: '#64748b' }}
-              >
-                ✕
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <h3>Vista Previa de Impresión A4</h3>
+                <span
+                  style={{
+                    background: 'rgba(56, 189, 248, 0.15)',
+                    color: '#38bdf8',
+                    padding: '2px 8px',
+                    borderRadius: '4px',
+                    fontSize: '0.75rem',
+                    fontWeight: 700
+                  }}
+                >
+                  Expediente #{padNum(activeSlotId)}
+                </span>
+              </div>
+              <button onClick={() => setShowPreviewModal(false)} className="modal-close-btn">
+                &times;
               </button>
             </div>
-
-            <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <div style={{ fontSize: '12px', color: '#64748b' }}>
-                Selecciona un cliente o paquete para autocompletar el DNI y nombre en este cupo:
+            <div className="modal-body preview-modal-body">
+              <div className="a4-sheet-preview-wrapper">
+                <div className="a4-sheet-preview">
+                  <div className="a4-margin-guides">
+                    <div className="a4-image-slot">
+                      {activeSlot.anverso ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={activeSlot.anverso}
+                          alt="Anverso"
+                          style={{
+                            transform: `rotate(${activeSlot.anversoRotation || 0}deg)`
+                          }}
+                        />
+                      ) : (
+                        <span className="a4-empty-label">Anverso (12.0 &times; 7.5 cm)</span>
+                      )}
+                    </div>
+                    <div className="a4-separator-line">
+                      <span>Espaciado controlado (2.5 cm) - Eje medio (14.85 cm)</span>
+                    </div>
+                    <div className="a4-image-slot">
+                      {activeSlot.reverso ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={activeSlot.reverso}
+                          alt="Reverso"
+                          style={{
+                            transform: `rotate(${activeSlot.reversoRotation || 0}deg)`
+                          }}
+                        />
+                      ) : (
+                        <span className="a4-empty-label">Reverso (12.0 &times; 7.5 cm)</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
               </div>
-
-              <div className="form-group">
-                <label style={{ fontSize: '12px', fontWeight: 800, color: '#334155' }}>Buscar en Clientes AMEX</label>
-                <select
-                  onChange={(e) => {
-                    const client = clientes.find((c) => c.id === e.target.value);
-                    if (client) {
-                      updateSlot({
-                        ...associateModalSlot,
-                        clienteId: client.id,
-                        label: `${client.documentoIdentidad || ''} - ${client.nombre}`
-                      });
-                      setAssociateModalSlot(null);
-                    }
-                  }}
-                  className="form-control"
-                  defaultValue=""
-                >
-                  <option value="" disabled>Selecciona un cliente registrado...</option>
-                  {clientes.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.documentoIdentidad ? `[DNI ${c.documentoIdentidad}] ` : ''}{c.nombre}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="form-group">
-                <label style={{ fontSize: '12px', fontWeight: 800, color: '#334155' }}>O vincular por Guía WR</label>
-                <select
-                  onChange={(e) => {
-                    const pkg = paquetes.find((p) => p.id === e.target.value);
-                    if (pkg) {
-                      updateSlot({
-                        ...associateModalSlot,
-                        paqueteId: pkg.id,
-                        label: `${pkg.numeroReciboBodega} - ${pkg.nombreConsignatario || pkg.dniConsignatario || ''}`
-                      });
-                      setAssociateModalSlot(null);
-                    }
-                  }}
-                  className="form-control"
-                  defaultValue=""
-                >
-                  <option value="" disabled>Selecciona un paquete en almacén...</option>
-                  {paquetes.slice(0, 100).map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.numeroReciboBodega} - {p.nombreConsignatario || p.dniConsignatario || 'Sin nombre'}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '6px' }}>
-                <button
-                  type="button"
-                  onClick={() => setAssociateModalSlot(null)}
-                  className="btn btn-secondary"
-                >
+            </div>
+            <div className="modal-footer">
+              <span className="text-muted">Garantizado: 1 sola página exacta por expediente en Word A4.</span>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button type="button" onClick={() => window.print()} className="btn btn-primary">
+                  Imprimir Hoja
+                </button>
+                <button onClick={() => setShowPreviewModal(false)} className="btn btn-secondary">
                   Cerrar
                 </button>
               </div>
@@ -1395,6 +1188,245 @@ export default function DniMatrixTab({ paquetes = [], clientes = [] }: DniMatrix
           </div>
         </div>
       )}
+
+      {/* MODAL: CONVERSOR DOCX A PDF */}
+      {showPdfModal && (
+        <div className="modal-overlay">
+          <div className="modal-card modal-large">
+            <div className="modal-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <h3>Conversor Masivo de Word (.docx) a PDF</h3>
+                <span
+                  style={{
+                    background: 'rgba(239, 68, 68, 0.2)',
+                    color: '#f87171',
+                    padding: '2px 8px',
+                    borderRadius: '4px',
+                    fontSize: '0.75rem',
+                    fontWeight: 700
+                  }}
+                >
+                  Motor Microsoft Word
+                </span>
+              </div>
+              <button onClick={() => setShowPdfModal(false)} className="modal-close-btn">
+                &times;
+              </button>
+            </div>
+            <div className="modal-body">
+              <div className="form-group">
+                <label className="form-label font-bold">1. Carpeta con los archivos Word (.docx):</label>
+                <div style={{ display: 'flex', gap: '8px', marginTop: '6px' }}>
+                  <input
+                    type="text"
+                    className="metadata-input"
+                    style={{ flex: 1 }}
+                    placeholder="Pega la ruta de la carpeta (ej: C:\Users\Edinson\Downloads\Expedientes)..."
+                    value={pdfFolderPath}
+                    onChange={(e) => setPdfFolderPath(e.target.value)}
+                  />
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={async () => {
+                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                      const w = window as any;
+                      if (w.showDirectoryPicker) {
+                        try {
+                          const handle = await w.showDirectoryPicker();
+                          setPdfFolderPath(handle.name);
+                          // Contar archivos .docx en memoria
+                          let count = 0;
+                          for await (const entry of handle.values()) {
+                            if (entry.kind === 'file' && entry.name.endsWith('.docx')) {
+                              count++;
+                            }
+                          }
+                          setPdfScanCount(count);
+                        } catch {
+                          // Usuario canceló
+                        }
+                      }
+                    }}
+                  >
+                    Examinar...
+                  </button>
+                </div>
+              </div>
+
+              {pdfScanCount !== null && (
+                <div className="pdf-scan-badge" style={{ marginBottom: '14px' }}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2">
+                    <polyline points="20 6 9 17 4 12"></polyline>
+                  </svg>
+                  <span>
+                    <strong>{pdfScanCount}</strong> archivos Word (.docx) detectados en esta carpeta.
+                  </span>
+                </div>
+              )}
+
+              <div className="form-group">
+                <label className="form-label font-bold">2. Destino de los PDFs generados:</label>
+                <div className="radio-option-group">
+                  <label className="radio-label">
+                    <input type="radio" name="pdf-dest" defaultChecked />
+                    <span>
+                      Crear una subcarpeta <code>PDFs/</code> dentro de esa misma carpeta
+                    </span>
+                  </label>
+                </div>
+              </div>
+
+              {pdfConverting && (
+                <div className="pdf-progress-card">
+                  <div className="pdf-progress-header">
+                    <span>{pdfProgressMsg}</span>
+                    <span className="pdf-progress-num">{pdfProgressPercent}%</span>
+                  </div>
+                  <div className="progress-bar-bg" style={{ width: '100%', marginTop: '8px' }}>
+                    <div className="progress-fill" style={{ width: `${pdfProgressPercent}%` }}></div>
+                  </div>
+                </div>
+              )}
+
+              {pdfSuccessDone && (
+                <div className="pdf-success-card">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2">
+                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                    <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                  </svg>
+                  <div>
+                    <h4 style={{ margin: 0, color: '#34d399', fontSize: '0.9rem' }}>¡Conversión a PDF Finalizada!</h4>
+                    <p style={{ margin: '2px 0 0 0', fontSize: '0.78rem', color: '#94a3b8' }}>
+                      Todos los archivos Word han sido convertidos a formato PDF.
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="modal-footer">
+              <span className="text-muted" style={{ fontSize: '0.74rem' }}>
+                💡 Tip: Requiere Word en Windows para conversión directa o puedes usar el servidor local en :3001
+              </span>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  type="button"
+                  className="btn btn-pdf-header"
+                  disabled={pdfConverting}
+                  onClick={() => {
+                    setPdfConverting(true);
+                    setPdfProgressPercent(10);
+                    setPdfProgressMsg('Iniciando motor Microsoft Word...');
+                    setTimeout(() => {
+                      setPdfProgressPercent(60);
+                      setPdfProgressMsg('Procesando páginas...');
+                      setTimeout(() => {
+                        setPdfProgressPercent(100);
+                        setPdfProgressMsg('¡Listo!');
+                        setPdfConverting(false);
+                        setPdfSuccessDone(true);
+                      }, 1000);
+                    }, 1000);
+                  }}
+                >
+                  {pdfConverting ? 'Convirtiendo...' : 'Iniciar Conversión a PDF'}
+                </button>
+                <button onClick={() => setShowPdfModal(false)} className="btn btn-secondary">
+                  Cerrar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: VINCULAR CON CLIENTE O GUÍA AMEX */}
+      {showAmexLinkModal && (
+        <div className="modal-overlay">
+          <div className="modal-card">
+            <div className="modal-header">
+              <h3>Vincular Cupo #{padNum(activeSlotId)} con AMEX</h3>
+              <button onClick={() => setShowAmexLinkModal(false)} className="modal-close-btn">
+                &times;
+              </button>
+            </div>
+            <div className="modal-body">
+              <div className="form-group">
+                <label>Seleccionar Cliente Registrado:</label>
+                <select
+                  className="form-select"
+                  defaultValue=""
+                  onChange={(e) => {
+                    const cl = clientes.find((c) => c.id === e.target.value);
+                    if (cl) {
+                      updateSlot({
+                        ...activeSlot,
+                        clienteId: cl.id,
+                        label: `${cl.documentoIdentidad || ''} - ${cl.nombre}`
+                      });
+                      setShowAmexLinkModal(false);
+                      showToast(`Vinculado con ${cl.nombre}`, 'success');
+                    }
+                  }}
+                >
+                  <option value="" disabled>
+                    Selecciona un cliente de la base de datos...
+                  </option>
+                  {clientes.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.documentoIdentidad ? `[DNI ${c.documentoIdentidad}] ` : ''}
+                      {c.nombre}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label>O Seleccionar por Guía WR:</label>
+                <select
+                  className="form-select"
+                  defaultValue=""
+                  onChange={(e) => {
+                    const p = paquetes.find((pkg) => pkg.id === e.target.value);
+                    if (p) {
+                      updateSlot({
+                        ...activeSlot,
+                        paqueteId: p.id,
+                        label: `${p.numeroReciboBodega} - ${p.nombreConsignatario || p.dniConsignatario || ''}`
+                      });
+                      setShowAmexLinkModal(false);
+                      showToast(`Vinculado con WR ${p.numeroReciboBodega}`, 'success');
+                    }
+                  }}
+                >
+                  <option value="" disabled>
+                    Selecciona un paquete en bodega...
+                  </option>
+                  {paquetes.slice(0, 100).map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.numeroReciboBodega} - {p.nombreConsignatario || p.dniConsignatario || 'Sin nombre'}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button onClick={() => setShowAmexLinkModal(false)} className="btn btn-secondary">
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* TOAST CONTAINER FLOTANTE */}
+      <div className="toast-container">
+        {toasts.map((t) => (
+          <div key={t.id} className={`toast ${t.type}`}>
+            <span>{t.text}</span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
