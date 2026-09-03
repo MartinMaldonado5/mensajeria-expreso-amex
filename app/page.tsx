@@ -59,6 +59,11 @@ const LiveSheetsTab = dynamic(() => import('@/components/tabs/LiveSheetsTab'), {
   loading: () => <PageSkeleton />
 });
 
+const DniMatrixTab = dynamic(() => import('@/components/tabs/DniMatrixTab'), {
+  ssr: false,
+  loading: () => <PageSkeleton />
+});
+
 const NewClientModal = dynamic(() => import('@/components/modals/NewClientModal'), { ssr: false });
 const NewPackageModal = dynamic(() => import('@/components/modals/NewPackageModal'), { ssr: false });
 const ThermalLabelModal = dynamic(() => import('@/components/modals/ThermalLabelModal'), { ssr: false });
@@ -637,6 +642,13 @@ export default function DashboardPage() {
                   onRefreshData={fetchSupabaseData}
                 />
               )}
+
+              {activeTab === 'dni-matrix' && (
+                <DniMatrixTab
+                  paquetes={paquetes}
+                  clientes={clientes}
+                />
+              )}
             </>
           )}
         </main>
@@ -682,20 +694,20 @@ export default function DashboardPage() {
 
         <button
           type="button"
+          onClick={() => setActiveTab('dni-matrix')}
+          className={`mobile-nav-btn ${activeTab === 'dni-matrix' ? 'active' : ''}`}
+        >
+          <i className="fa-solid fa-id-card"></i>
+          <span>DNI</span>
+        </button>
+
+        <button
+          type="button"
           onClick={() => setActiveTab('shp-deliveries')}
           className={`mobile-nav-btn ${activeTab === 'shp-deliveries' ? 'active' : ''}`}
         >
           <i className="fa-solid fa-truck"></i>
           <span>Chofer</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveTab('fico-cobros')}
-          className={`mobile-nav-btn ${activeTab === 'fico-cobros' ? 'active' : ''}`}
-        >
-          <i className="fa-solid fa-receipt"></i>
-          <span>Cobros</span>
         </button>
 
         <button
