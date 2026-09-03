@@ -15,23 +15,84 @@ import { saveAs } from 'file-saver';
 import JSZip from 'jszip';
 import { DniSlotData } from './db';
 
-// Medidas estándar A4 en twips (1 mm = 56.7 twips)
-// 210 mm = 11906 twips, 297 mm = 16838 twips
-// 20 mm margen = 1134 twips
-const MARGIN_TWIPS = convertMillimetersToTwip(20);
+export type DniPrintSize = 'large' | 'xlarge' | 'standard';
 
-// Medidas objetivo para imagen DNI en píxeles (96 DPI):
-// 12.0 cm = 120 mm = ~454 px
-// 7.5 cm = 75 mm = ~283 px
-const TARGET_WIDTH_PX = 454;
-const TARGET_HEIGHT_PX = 283;
+export interface DniSizeConfig {
+  id: DniPrintSize;
+  name: string;
+  widthCm: number;
+  heightCm: number;
+  widthMm: number;
+  heightMm: number;
+  widthPx: number;
+  heightPx: number;
+  spacingAfterTwips: number;
+  marginMm: number;
+  marginTwips: number;
+  pdfX: number;
+  pdfY1: number;
+  pdfY2: number;
+}
+
+export const DNI_SIZE_PRESETS: Record<DniPrintSize, DniSizeConfig> = {
+  large: {
+    id: 'large',
+    name: 'Grande (16.5 × 10.4 cm) [Recomendado - Ocupa la hoja]',
+    widthCm: 16.5,
+    heightCm: 10.4,
+    widthMm: 165,
+    heightMm: 104,
+    widthPx: 624,
+    heightPx: 393,
+    spacingAfterTwips: 240, // ~1.2 cm
+    marginMm: 18,
+    marginTwips: convertMillimetersToTwip(18),
+    pdfX: 22.5,
+    pdfY1: 20,
+    pdfY2: 138
+  },
+  xlarge: {
+    id: 'xlarge',
+    name: 'Extra Grande (17.5 × 11.0 cm) [Ocupación máxima]',
+    widthCm: 17.5,
+    heightCm: 11.0,
+    widthMm: 175,
+    heightMm: 110,
+    widthPx: 661,
+    heightPx: 416,
+    spacingAfterTwips: 180, // ~0.9 cm
+    marginMm: 15,
+    marginTwips: convertMillimetersToTwip(15),
+    pdfX: 17.5,
+    pdfY1: 16,
+    pdfY2: 140
+  },
+  standard: {
+    id: 'standard',
+    name: 'Estándar (12.0 × 7.5 cm) [Medida tradicional pequeña]',
+    widthCm: 12.0,
+    heightCm: 7.5,
+    widthMm: 120,
+    heightMm: 75,
+    widthPx: 454,
+    heightPx: 283,
+    spacingAfterTwips: 360, // ~2.5 cm
+    marginMm: 20,
+    marginTwips: convertMillimetersToTwip(20),
+    pdfX: 45,
+    pdfY1: 25,
+    pdfY2: 125
+  }
+};
 
 /**
- * Normaliza y procesa una imagen base64 aplicando rotación y ajustándola al marco A4.
+ * Normaliza y procesa una imagen base64 aplicando rotación y ajustándola al tamaño objetivo.
  */
 export async function normalizeImage(
   base64Data: string,
-  rotation = 0
+  rotation = 0,
+  targetWidthPx = DNI_SIZE_PRESETS.large.widthPx,
+  targetHeightPx = DNI_SIZE_PRESETS.large.heightPx
 ): Promise<{ buffer: Uint8Array; width: number; height: number }> {
   return new Promise((resolve, reject) => {
     if (typeof window === 'undefined') {
@@ -48,11 +109,11 @@ export async function normalizeImage(
       const naturalH = isRotated ? (img.naturalWidth || img.width) : (img.naturalHeight || img.height);
 
       const ratio = naturalW / naturalH;
-      let finalW = TARGET_WIDTH_PX;
+      let finalW = targetWidthPx;
       let finalH = Math.round(finalW / ratio);
 
-      if (finalH > TARGET_HEIGHT_PX) {
-        finalH = TARGET_HEIGHT_PX;
+      if (finalH > targetHeightPx) {
+        finalH = targetHeightPx;
         finalW = Math.round(finalH * ratio);
       }
 
@@ -110,31 +171,27 @@ function sanitizeFilename(text: string): string {
 }
 
 /**
- * Crea las secciones / párrafos de un expediente dentro de Word
+ * Crea las secciones / párrafos de un expediente dentro de Word con el tamaño seleccionado
  */
-async function buildExpedienteChildren(slot: DniSlotData): Promise<Paragraph[]> {
+async function buildExpedienteChildren(
+  slot: DniSlotData,
+  sizePreset: DniPrintSize = 'large'
+): Promise<Paragraph[]> {
   const children: Paragraph[] = [];
-
-  // Título o identificación discreta del expediente
-  const labelText = slot.label
-    ? `Expediente #${String(slot.id).padStart(4, '0')} - ${slot.label}`
-    : `Expediente #${String(slot.id).padStart(4, '0')}`;
-
-  children.push(
-    new Paragraph({
-      alignment: AlignmentType.CENTER,
-      spacing: { after: 120 },
-      children: []
-    })
-  );
+  const config = DNI_SIZE_PRESETS[sizePreset] || DNI_SIZE_PRESETS.large;
 
   // 1. ANVERSO (mitad superior)
   if (slot.anverso) {
-    const anversoImg = await normalizeImage(slot.anverso, slot.anversoRotation || 0);
+    const anversoImg = await normalizeImage(
+      slot.anverso,
+      slot.anversoRotation || 0,
+      config.widthPx,
+      config.heightPx
+    );
     children.push(
       new Paragraph({
         alignment: AlignmentType.CENTER,
-        spacing: { after: 360 }, // Espacio intermedio (~2.5 cm)
+        spacing: { after: config.spacingAfterTwips },
         children: [
           new ImageRun({
             data: anversoImg.buffer,
@@ -151,7 +208,12 @@ async function buildExpedienteChildren(slot: DniSlotData): Promise<Paragraph[]> 
 
   // 2. REVERSO (mitad inferior)
   if (slot.reverso) {
-    const reversoImg = await normalizeImage(slot.reverso, slot.reversoRotation || 0);
+    const reversoImg = await normalizeImage(
+      slot.reverso,
+      slot.reversoRotation || 0,
+      config.widthPx,
+      config.heightPx
+    );
     children.push(
       new Paragraph({
         alignment: AlignmentType.CENTER,
@@ -178,13 +240,15 @@ async function buildExpedienteChildren(slot: DniSlotData): Promise<Paragraph[]> 
  */
 export async function exportMasterDocx(
   slots: DniSlotData[],
-  onProgress?: (status: string) => void
+  onProgress?: (status: string) => void,
+  sizePreset: DniPrintSize = 'large'
 ): Promise<void> {
   const completeSlots = slots.filter((s) => s.anverso && s.reverso);
   if (completeSlots.length === 0) {
     throw new Error('No hay expedientes completos (con anverso y reverso) para exportar.');
   }
 
+  const config = DNI_SIZE_PRESETS[sizePreset] || DNI_SIZE_PRESETS.large;
   onProgress?.('Preparando documento Word Maestro A4...');
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -193,7 +257,7 @@ export async function exportMasterDocx(
   for (let i = 0; i < completeSlots.length; i++) {
     const slot = completeSlots[i];
     onProgress?.(`Procesando expediente ${i + 1} de ${completeSlots.length} (#${slot.id})...`);
-    const children = await buildExpedienteChildren(slot);
+    const children = await buildExpedienteChildren(slot, sizePreset);
 
     sections.push({
       properties: {
@@ -203,10 +267,10 @@ export async function exportMasterDocx(
             height: convertMillimetersToTwip(297) // A4 297 mm
           },
           margin: {
-            top: MARGIN_TWIPS,
-            bottom: MARGIN_TWIPS,
-            left: MARGIN_TWIPS,
-            right: MARGIN_TWIPS
+            top: config.marginTwips,
+            bottom: config.marginTwips,
+            left: config.marginTwips,
+            right: config.marginTwips
           }
         }
       },
@@ -236,20 +300,22 @@ export async function exportMasterDocx(
  */
 export async function exportZipDocx(
   slots: DniSlotData[],
-  onProgress?: (current: number, total: number) => void
+  onProgress?: (current: number, total: number) => void,
+  sizePreset: DniPrintSize = 'large'
 ): Promise<void> {
   const completeSlots = slots.filter((s) => s.anverso && s.reverso);
   if (completeSlots.length === 0) {
     throw new Error('No hay expedientes completos (con anverso y reverso) para exportar en ZIP.');
   }
 
+  const config = DNI_SIZE_PRESETS[sizePreset] || DNI_SIZE_PRESETS.large;
   const zip = new JSZip();
 
   for (let i = 0; i < completeSlots.length; i++) {
     const slot = completeSlots[i];
     onProgress?.(i + 1, completeSlots.length);
 
-    const children = await buildExpedienteChildren(slot);
+    const children = await buildExpedienteChildren(slot, sizePreset);
 
     const doc = new Document({
       title: `Expediente #${slot.id}`,
@@ -263,10 +329,10 @@ export async function exportZipDocx(
                 height: convertMillimetersToTwip(297)
               },
               margin: {
-                top: MARGIN_TWIPS,
-                bottom: MARGIN_TWIPS,
-                left: MARGIN_TWIPS,
-                right: MARGIN_TWIPS
+                top: config.marginTwips,
+                bottom: config.marginTwips,
+                left: config.marginTwips,
+                right: config.marginTwips
               }
             }
           },
@@ -294,7 +360,8 @@ export async function exportZipDocx(
  */
 export async function exportToDirectoryFolder(
   slots: DniSlotData[],
-  onProgress?: (msg: string, percent?: number) => void
+  onProgress?: (msg: string, percent?: number) => void,
+  sizePreset: DniPrintSize = 'large'
 ): Promise<{ success: boolean; count: number; cancelled?: boolean }> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const w = window as any;
@@ -306,6 +373,8 @@ export async function exportToDirectoryFolder(
   if (completeSlots.length === 0) {
     throw new Error('No hay expedientes completos para exportar.');
   }
+
+  const config = DNI_SIZE_PRESETS[sizePreset] || DNI_SIZE_PRESETS.large;
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let dirHandle: any;
@@ -329,7 +398,7 @@ export async function exportToDirectoryFolder(
     const percent = Math.round(((i + 1) / total) * 100);
     onProgress?.(`Guardando expediente ${i + 1} de ${total}...`, percent);
 
-    const children = await buildExpedienteChildren(slot);
+    const children = await buildExpedienteChildren(slot, sizePreset);
     const doc = new Document({
       title: `Expediente #${slot.id}`,
       creator: 'Amex Courier ERP - DNI Matrix Express',
@@ -342,10 +411,10 @@ export async function exportToDirectoryFolder(
                 height: convertMillimetersToTwip(297)
               },
               margin: {
-                top: MARGIN_TWIPS,
-                bottom: MARGIN_TWIPS,
-                left: MARGIN_TWIPS,
-                right: MARGIN_TWIPS
+                top: config.marginTwips,
+                bottom: config.marginTwips,
+                left: config.marginTwips,
+                right: config.marginTwips
               }
             }
           },

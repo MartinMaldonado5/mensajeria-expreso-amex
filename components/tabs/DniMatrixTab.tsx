@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import './dni-matrix.css';
 import { dniDb, DniSlotData } from '@/lib/dni-matrix/db';
-import { exportMasterDocx, exportZipDocx, exportToDirectoryFolder } from '@/lib/dni-matrix/docx-exporter';
+import { exportMasterDocx, exportZipDocx, exportToDirectoryFolder, DniPrintSize, DNI_SIZE_PRESETS } from '@/lib/dni-matrix/docx-exporter';
 import { convertDocxFolderToPdf, exportPdfZip } from '@/lib/dni-matrix/pdf-converter';
 import { Paquete, Cliente } from '@/types';
 
@@ -21,6 +21,7 @@ interface ToastMessage {
 export default function DniMatrixTab({ paquetes = [], clientes = [] }: DniMatrixTabProps) {
   // Configuración y Estados
   const [totalSlots, setTotalSlots] = useState<number>(100);
+  const [printSize, setPrintSize] = useState<DniPrintSize>('large');
   const [activeSlotId, setActiveSlotId] = useState<number>(1);
   const [focusedSide, setFocusedSide] = useState<'anverso' | 'reverso' | null>(null);
   const [slotsData, setSlotsData] = useState<Record<number, DniSlotData>>({});
@@ -122,6 +123,9 @@ export default function DniMatrixTab({ paquetes = [], clientes = [] }: DniMatrix
 
       const savedSound = await dniDb.getSetting<boolean>('soundEnabled', true);
       setSoundEnabled(savedSound);
+
+      const savedPrintSize = await dniDb.getSetting<DniPrintSize>('dniPrintSize', 'large');
+      setPrintSize(savedPrintSize);
     }
     initData();
   }, []);
@@ -516,7 +520,7 @@ export default function DniMatrixTab({ paquetes = [], clientes = [] }: DniMatrix
     try {
       setIsExporting(true);
       setExportStatusMessage('Preparando Word Maestro Único...');
-      await exportMasterDocx(completed, (msg) => setExportStatusMessage(msg));
+      await exportMasterDocx(completed, (msg) => setExportStatusMessage(msg), printSize);
       showToast('¡Documento Word Maestro generado con éxito!', 'success');
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error al exportar';
@@ -537,9 +541,13 @@ export default function DniMatrixTab({ paquetes = [], clientes = [] }: DniMatrix
     try {
       setIsExporting(true);
       setExportStatusMessage('Comprimiendo archivos en ZIP...');
-      await exportZipDocx(completed, (curr, tot) => {
-        setExportStatusMessage(`Comprimiendo expediente ${curr} de ${tot}...`);
-      });
+      await exportZipDocx(
+        completed,
+        (curr, tot) => {
+          setExportStatusMessage(`Comprimiendo expediente ${curr} de ${tot}...`);
+        },
+        printSize
+      );
       showToast('¡Carpeta ZIP generada con éxito!', 'success');
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error al exportar ZIP';
@@ -560,7 +568,11 @@ export default function DniMatrixTab({ paquetes = [], clientes = [] }: DniMatrix
     try {
       setIsExporting(true);
       setExportStatusMessage('Selecciona la carpeta donde guardar los archivos...');
-      const res = await exportToDirectoryFolder(completed, (msg) => setExportStatusMessage(msg));
+      const res = await exportToDirectoryFolder(
+        completed,
+        (msg) => setExportStatusMessage(msg),
+        printSize
+      );
       if (res.cancelled) {
         showToast('Operación cancelada');
       } else {
@@ -585,9 +597,13 @@ export default function DniMatrixTab({ paquetes = [], clientes = [] }: DniMatrix
     try {
       setIsExporting(true);
       setExportStatusMessage('Generando PDFs A4 milimétricos...');
-      await exportPdfZip(completed, (curr, tot) => {
-        setExportStatusMessage(`Generando PDF ${curr} de ${tot}...`);
-      });
+      await exportPdfZip(
+        completed,
+        (curr, tot) => {
+          setExportStatusMessage(`Generando PDF ${curr} de ${tot}...`);
+        },
+        printSize
+      );
       showToast(`¡${completed.length} archivos PDF generados y descargados en ZIP!`, 'success');
       playSound('complete');
     } catch (err: unknown) {
@@ -665,7 +681,8 @@ export default function DniMatrixTab({ paquetes = [], clientes = [] }: DniMatrix
           const pct = Math.round((curr / total) * 100);
           setPdfProgressPercent(pct);
           setPdfProgressMsg(`Convirtiendo ${curr} de ${total}: ${filename}`);
-        }
+        },
+        printSize
       );
 
       setPdfProgressPercent(100);
@@ -816,7 +833,9 @@ export default function DniMatrixTab({ paquetes = [], clientes = [] }: DniMatrix
           {/* Área de Pegado y Simulación A4 */}
           <div className="sheet-simulation-wrapper">
             <div className="sheet-simulation-header">
-              <span>Hoja A4 (21.0 &times; 29.7 cm) - Márgenes: 2.0 cm - Medida DNI: 12.0 &times; 7.5 cm</span>
+              <span>
+                Hoja A4 (21.0 &times; 29.7 cm) &bull; Tamaño DNI: <strong>{DNI_SIZE_PRESETS[printSize]?.widthCm || 16.5} &times; {DNI_SIZE_PRESETS[printSize]?.heightCm || 10.4} cm</strong> ({DNI_SIZE_PRESETS[printSize]?.id === 'large' ? 'Grande - Ocupa la hoja' : DNI_SIZE_PRESETS[printSize]?.id === 'xlarge' ? 'Extra Grande' : 'Estándar'})
+              </span>
               <span className="tip-kbd">
                 Portapapeles activo: Presiona <kbd>Ctrl+V</kbd> en cualquier momento
               </span>
@@ -1441,6 +1460,115 @@ export default function DniMatrixTab({ paquetes = [], clientes = [] }: DniMatrix
 
               <hr className="modal-divider" />
 
+              {/* Selector de Tamaño de DNI en Word y PDF */}
+              <div className="form-group">
+                <label className="font-bold" style={{ color: 'var(--accent-cyan)' }}>
+                  📐 Tamaño de los DNI en la Hoja Word y PDF:
+                </label>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '8px' }}>
+                  <label
+                    style={{
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      gap: '10px',
+                      cursor: 'pointer',
+                      padding: '10px 12px',
+                      borderRadius: '8px',
+                      background: printSize === 'large' ? 'rgba(56, 189, 248, 0.12)' : 'rgba(255, 255, 255, 0.03)',
+                      border: printSize === 'large' ? '1.5px solid #38bdf8' : '1px solid rgba(255, 255, 255, 0.08)'
+                    }}
+                  >
+                    <input
+                      type="radio"
+                      name="printSizeOption"
+                      checked={printSize === 'large'}
+                      onChange={async () => {
+                        setPrintSize('large');
+                        await dniDb.saveSetting('dniPrintSize', 'large');
+                        showToast('Tamaño Grande (16.5 × 10.4 cm) guardado', 'success');
+                      }}
+                      style={{ marginTop: '3px' }}
+                    />
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: '0.88rem', color: '#f8fafc' }}>
+                        Grande (16.5 &times; 10.4 cm) <span className="badge badge-ready" style={{ marginLeft: '6px' }}>Recomendado</span>
+                      </div>
+                      <div style={{ fontSize: '0.74rem', color: '#94a3b8', marginTop: '2px' }}>
+                        Ocupa la mayor parte de la hoja A4 sin dejar espacios vacíos exagerados. Información y sellos del DNI 100% nítidos y legibles (1 sola página exacta).
+                      </div>
+                    </div>
+                  </label>
+
+                  <label
+                    style={{
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      gap: '10px',
+                      cursor: 'pointer',
+                      padding: '10px 12px',
+                      borderRadius: '8px',
+                      background: printSize === 'xlarge' ? 'rgba(56, 189, 248, 0.12)' : 'rgba(255, 255, 255, 0.03)',
+                      border: printSize === 'xlarge' ? '1.5px solid #38bdf8' : '1px solid rgba(255, 255, 255, 0.08)'
+                    }}
+                  >
+                    <input
+                      type="radio"
+                      name="printSizeOption"
+                      checked={printSize === 'xlarge'}
+                      onChange={async () => {
+                        setPrintSize('xlarge');
+                        await dniDb.saveSetting('dniPrintSize', 'xlarge');
+                        showToast('Tamaño Extra Grande (17.5 × 11.0 cm) guardado', 'success');
+                      }}
+                      style={{ marginTop: '3px' }}
+                    />
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: '0.88rem', color: '#f8fafc' }}>
+                        Extra Grande (17.5 &times; 11.0 cm)
+                      </div>
+                      <div style={{ fontSize: '0.74rem', color: '#94a3b8', marginTop: '2px' }}>
+                        Ocupación máxima de margen a margen (1.5 cm) en la hoja A4 para casos donde se requiere ver cada detalle microscópico.
+                      </div>
+                    </div>
+                  </label>
+
+                  <label
+                    style={{
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      gap: '10px',
+                      cursor: 'pointer',
+                      padding: '10px 12px',
+                      borderRadius: '8px',
+                      background: printSize === 'standard' ? 'rgba(56, 189, 248, 0.12)' : 'rgba(255, 255, 255, 0.03)',
+                      border: printSize === 'standard' ? '1.5px solid #38bdf8' : '1px solid rgba(255, 255, 255, 0.08)'
+                    }}
+                  >
+                    <input
+                      type="radio"
+                      name="printSizeOption"
+                      checked={printSize === 'standard'}
+                      onChange={async () => {
+                        setPrintSize('standard');
+                        await dniDb.saveSetting('dniPrintSize', 'standard');
+                        showToast('Tamaño Estándar (12.0 × 7.5 cm) guardado', 'info');
+                      }}
+                      style={{ marginTop: '3px' }}
+                    />
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: '0.88rem', color: '#f8fafc' }}>
+                        Estándar (12.0 &times; 7.5 cm)
+                      </div>
+                      <div style={{ fontSize: '0.74rem', color: '#94a3b8', marginTop: '2px' }}>
+                        Medida reglamentaria tradicional más pequeña, centrada en la hoja con amplios márgenes alrededor.
+                      </div>
+                    </div>
+                  </label>
+                </div>
+              </div>
+
+              <hr className="modal-divider" />
+
               <div className="form-group">
                 <label className="text-danger font-bold">Zona de Peligro:</label>
                 <p className="text-muted" style={{ fontSize: '0.8rem', marginTop: '4px' }}>
@@ -1473,6 +1601,9 @@ export default function DniMatrixTab({ paquetes = [], clientes = [] }: DniMatrix
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <h3>Vista Previa Impresión A4</h3>
                 <span className="badge badge-ready">Expediente #{padNum(activeSlotId)}</span>
+                <span className="badge badge-partial">
+                  {DNI_SIZE_PRESETS[printSize]?.widthCm} &times; {DNI_SIZE_PRESETS[printSize]?.heightCm} cm
+                </span>
               </div>
               <button onClick={() => setShowPreviewModal(false)} className="modal-close-btn">
                 &times;
@@ -1486,7 +1617,7 @@ export default function DniMatrixTab({ paquetes = [], clientes = [] }: DniMatrix
                   color: '#000000',
                   width: '320px',
                   height: '452px',
-                  padding: '24px 20px',
+                  padding: printSize === 'large' ? '16px 14px' : printSize === 'xlarge' ? '14px 10px' : '24px 20px',
                   boxShadow: '0 10px 40px rgba(0,0,0,0.8)',
                   borderRadius: '4px',
                   position: 'relative'
@@ -1496,7 +1627,7 @@ export default function DniMatrixTab({ paquetes = [], clientes = [] }: DniMatrix
                 <div
                   style={{
                     width: '100%',
-                    height: '140px',
+                    height: printSize === 'large' ? '165px' : printSize === 'xlarge' ? '175px' : '140px',
                     border: '1.5px dashed #94a3b8',
                     borderRadius: '4px',
                     display: 'flex',
@@ -1519,14 +1650,16 @@ export default function DniMatrixTab({ paquetes = [], clientes = [] }: DniMatrix
                       }}
                     />
                   ) : (
-                    <span style={{ fontSize: '11px', color: '#94a3b8' }}>Anverso (12.0 &times; 7.5 cm)</span>
+                    <span style={{ fontSize: '11px', color: '#94a3b8' }}>
+                      Anverso ({DNI_SIZE_PRESETS[printSize]?.widthCm} &times; {DNI_SIZE_PRESETS[printSize]?.heightCm} cm)
+                    </span>
                   )}
                 </div>
 
                 {/* Separador */}
                 <div
                   style={{
-                    margin: '28px 0',
+                    margin: printSize === 'large' ? '14px 0' : printSize === 'xlarge' ? '10px 0' : '24px 0',
                     borderTop: '1px dotted #cbd5e1',
                     position: 'relative'
                   }}
@@ -1543,7 +1676,7 @@ export default function DniMatrixTab({ paquetes = [], clientes = [] }: DniMatrix
                       color: '#94a3b8'
                     }}
                   >
-                    Separación 2.5 cm
+                    Separación {printSize === 'large' ? '1.2 cm' : printSize === 'xlarge' ? '0.9 cm' : '2.5 cm'}
                   </span>
                 </div>
 
@@ -1551,7 +1684,7 @@ export default function DniMatrixTab({ paquetes = [], clientes = [] }: DniMatrix
                 <div
                   style={{
                     width: '100%',
-                    height: '140px',
+                    height: printSize === 'large' ? '165px' : printSize === 'xlarge' ? '175px' : '140px',
                     border: '1.5px dashed #94a3b8',
                     borderRadius: '4px',
                     display: 'flex',
@@ -1574,14 +1707,16 @@ export default function DniMatrixTab({ paquetes = [], clientes = [] }: DniMatrix
                       }}
                     />
                   ) : (
-                    <span style={{ fontSize: '11px', color: '#94a3b8' }}>Reverso (12.0 &times; 7.5 cm)</span>
+                    <span style={{ fontSize: '11px', color: '#94a3b8' }}>
+                      Reverso ({DNI_SIZE_PRESETS[printSize]?.widthCm} &times; {DNI_SIZE_PRESETS[printSize]?.heightCm} cm)
+                    </span>
                   )}
                 </div>
               </div>
             </div>
             <div className="modal-footer">
               <span className="text-muted" style={{ fontSize: '0.8rem' }}>
-                Medidas exactas para impresión física en hoja A4 (21.0 &times; 29.7 cm).
+                Medidas exactas para impresión física en hoja A4 (21.0 &times; 29.7 cm). Tamaño actual: {DNI_SIZE_PRESETS[printSize]?.widthCm} &times; {DNI_SIZE_PRESETS[printSize]?.heightCm} cm.
               </span>
               <button onClick={() => setShowPreviewModal(false)} className="btn btn-secondary">
                 Cerrar

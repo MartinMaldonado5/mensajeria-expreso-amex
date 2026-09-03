@@ -1,16 +1,8 @@
-/**
- * MOTOR DE CONVERSIÓN DOCX A PDF Y GENERADOR DIRECTO DE PDF A4
- * Funciona de forma 100% nativa en el navegador (Client-Side),
- * sin requerir PowerShell ni Microsoft Word instalado.
- * Permite guardar directamente en la carpeta de Windows (creando la subcarpeta PDFs/)
- * a través de la File System Access API.
- */
-
 import JSZip from 'jszip';
 import jsPDF from 'jspdf';
 import { saveAs } from 'file-saver';
 import { DniSlotData } from './db';
-import { normalizeImage } from './docx-exporter';
+import { normalizeImage, DniPrintSize, DNI_SIZE_PRESETS } from './docx-exporter';
 
 function uint8ArrayToBase64(bytes: Uint8Array): string {
   let binary = '';
@@ -24,8 +16,12 @@ function uint8ArrayToBase64(bytes: Uint8Array): string {
 /**
  * Convierte un único archivo .docx a un documento PDF A4 con medidas exactas
  */
-export async function convertDocxBufferToPdf(arrayBuffer: ArrayBuffer): Promise<Blob> {
+export async function convertDocxBufferToPdf(
+  arrayBuffer: ArrayBuffer,
+  sizePreset: DniPrintSize = 'large'
+): Promise<Blob> {
   const zip = await JSZip.loadAsync(arrayBuffer);
+  const config = DNI_SIZE_PRESETS[sizePreset] || DNI_SIZE_PRESETS.large;
 
   // Las imágenes del documento Word residen en word/media/
   const mediaKeys = Object.keys(zip.files).filter(
@@ -39,23 +35,20 @@ export async function convertDocxBufferToPdf(arrayBuffer: ArrayBuffer): Promise<
     format: 'a4' // 210 x 297 mm
   });
 
-  // Hoja A4: 210 x 297 mm
-  // Medida DNI: 120 x 75 mm
-  // Centrado horizontal: (210 - 120) / 2 = 45 mm
-  const x = 45;
-  const w = 120;
-  const h = 75;
+  const x = config.pdfX;
+  const w = config.widthMm;
+  const h = config.heightMm;
 
-  // Anverso (mitad superior: Y = 25 mm)
+  // Anverso (mitad superior)
   if (mediaKeys.length > 0) {
     const anversoB64 = await zip.files[mediaKeys[0]].async('base64');
-    doc.addImage(`data:image/jpeg;base64,${anversoB64}`, 'JPEG', x, 25, w, h);
+    doc.addImage(`data:image/jpeg;base64,${anversoB64}`, 'JPEG', x, config.pdfY1, w, h);
   }
 
-  // Reverso (mitad inferior: 25 + 75 + 25 = 125 mm)
+  // Reverso (mitad inferior)
   if (mediaKeys.length > 1) {
     const reversoB64 = await zip.files[mediaKeys[1]].async('base64');
-    doc.addImage(`data:image/jpeg;base64,${reversoB64}`, 'JPEG', x, 125, w, h);
+    doc.addImage(`data:image/jpeg;base64,${reversoB64}`, 'JPEG', x, config.pdfY2, w, h);
   }
 
   return doc.output('blob');
@@ -70,7 +63,8 @@ export async function convertDocxFolderToPdf(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   dirHandle: any,
   sameFolder = false,
-  onProgress?: (current: number, total: number, filename: string) => void
+  onProgress?: (current: number, total: number, filename: string) => void,
+  sizePreset: DniPrintSize = 'large'
 ): Promise<{ success: boolean; total: number; errors: number; destFolder: string }> {
   // 1. Escaneo de archivos .docx en la carpeta seleccionada
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -107,7 +101,7 @@ export async function convertDocxFolderToPdf(
     try {
       const file = await handle.getFile();
       const arrayBuffer = await file.arrayBuffer();
-      const pdfBlob = await convertDocxBufferToPdf(arrayBuffer);
+      const pdfBlob = await convertDocxBufferToPdf(arrayBuffer, sizePreset);
 
       const baseName = name.replace(/\.docx$/i, '');
       const pdfFilename = `${baseName}.pdf`;
@@ -130,27 +124,41 @@ export async function convertDocxFolderToPdf(
 /**
  * Genera y descarga un PDF A4 individual para un slot
  */
-export async function createPdfForSlot(slot: DniSlotData): Promise<Blob> {
+export async function createPdfForSlot(
+  slot: DniSlotData,
+  sizePreset: DniPrintSize = 'large'
+): Promise<Blob> {
+  const config = DNI_SIZE_PRESETS[sizePreset] || DNI_SIZE_PRESETS.large;
   const doc = new jsPDF({
     orientation: 'portrait',
     unit: 'mm',
     format: 'a4'
   });
 
-  const x = 45;
-  const w = 120;
-  const h = 75;
+  const x = config.pdfX;
+  const w = config.widthMm;
+  const h = config.heightMm;
 
   if (slot.anverso) {
-    const anversoImg = await normalizeImage(slot.anverso, slot.anversoRotation || 0);
+    const anversoImg = await normalizeImage(
+      slot.anverso,
+      slot.anversoRotation || 0,
+      config.widthPx,
+      config.heightPx
+    );
     const anversoDataUrl = `data:image/jpeg;base64,${uint8ArrayToBase64(anversoImg.buffer)}`;
-    doc.addImage(anversoDataUrl, 'JPEG', x, 25, w, h);
+    doc.addImage(anversoDataUrl, 'JPEG', x, config.pdfY1, w, h);
   }
 
   if (slot.reverso) {
-    const reversoImg = await normalizeImage(slot.reverso, slot.reversoRotation || 0);
+    const reversoImg = await normalizeImage(
+      slot.reverso,
+      slot.reversoRotation || 0,
+      config.widthPx,
+      config.heightPx
+    );
     const reversoDataUrl = `data:image/jpeg;base64,${uint8ArrayToBase64(reversoImg.buffer)}`;
-    doc.addImage(reversoDataUrl, 'JPEG', x, 125, w, h);
+    doc.addImage(reversoDataUrl, 'JPEG', x, config.pdfY2, w, h);
   }
 
   return doc.output('blob');
@@ -161,7 +169,8 @@ export async function createPdfForSlot(slot: DniSlotData): Promise<Blob> {
  */
 export async function exportPdfZip(
   slots: DniSlotData[],
-  onProgress?: (current: number, total: number) => void
+  onProgress?: (current: number, total: number) => void,
+  sizePreset: DniPrintSize = 'large'
 ): Promise<void> {
   const completeSlots = slots.filter((s) => s.anverso && s.reverso);
   if (completeSlots.length === 0) {
@@ -174,7 +183,7 @@ export async function exportPdfZip(
     const slot = completeSlots[i];
     onProgress?.(i + 1, completeSlots.length);
 
-    const pdfBlob = await createPdfForSlot(slot);
+    const pdfBlob = await createPdfForSlot(slot, sizePreset);
     const numStr = String(slot.id).padStart(3, '0');
     const labelSuffix = slot.label ? `_${slot.label.replace(/[\\/:*?"<>|]/g, '_').trim()}` : '';
     const filename = `Expediente_${numStr}${labelSuffix}.pdf`;
