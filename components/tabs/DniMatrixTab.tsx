@@ -210,6 +210,190 @@ export default function DniMatrixTab({ paquetes = [], clientes = [] }: DniMatrix
     showToast('Caras intercambiadas exitosamente', 'success');
   };
 
+  // ==========================================================================
+  // EXTRACCIÓN Y PROCESAMIENTO UNIVERSAL DE IMÁGENES (Ctrl+V y Arrastre de WhatsApp Web)
+  // ==========================================================================
+  const [dragHoverSide, setDragHoverSide] = useState<'anverso' | 'reverso' | 'surface' | null>(null);
+
+  const processImagePayload = useCallback(
+    async (base64Data: string, explicitSide?: 'anverso' | 'reverso' | null) => {
+      const currentId = activeSlotRef.current;
+      const currentSlot = getSlot(currentId);
+
+      let sideToAssign = explicitSide || focusedSide;
+      if (!sideToAssign) {
+        if (!currentSlot.anverso) {
+          sideToAssign = 'anverso';
+        } else if (!currentSlot.reverso) {
+          sideToAssign = 'reverso';
+        } else {
+          sideToAssign = 'anverso';
+        }
+      }
+
+      const rotKey = sideToAssign === 'anverso' ? 'anversoRotation' : 'reversoRotation';
+      const updatedSlot: DniSlotData = {
+        ...currentSlot,
+        [sideToAssign]: base64Data,
+        [rotKey]: 0
+      };
+
+      await updateSlot(updatedSlot);
+      const sideName = sideToAssign === 'anverso' ? 'Anverso' : 'Reverso';
+      showToast(`${sideName} cargado en Expediente #${padNum(currentId)}`, 'success');
+
+      const isNowComplete = Boolean(updatedSlot.anverso && updatedSlot.reverso);
+      if (isNowComplete) {
+        playSound('complete');
+        setTimeout(() => {
+          jumpToNextIncompleteSlot();
+        }, 350);
+      } else {
+        playSound('paste');
+        setFocusedSide('reverso');
+      }
+    },
+    [focusedSide, getSlot, updateSlot, showToast, playSound, jumpToNextIncompleteSlot]
+  );
+
+  const extractBase64FromDataTransfer = async (dt: DataTransfer): Promise<string | null> => {
+    // 1. Archivos directos
+    if (dt.files && dt.files.length > 0) {
+      for (let i = 0; i < dt.files.length; i++) {
+        const f = dt.files[i];
+        if (f.type.startsWith('image/')) {
+          return new Promise((resolve) => {
+            const r = new FileReader();
+            r.onload = () => resolve(r.result as string);
+            r.onerror = () => resolve(null);
+            r.readAsDataURL(f);
+          });
+        }
+      }
+    }
+
+    // 2. DataTransfer Items
+    if (dt.items && dt.items.length > 0) {
+      for (let i = 0; i < dt.items.length; i++) {
+        const item = dt.items[i];
+        if (item.type.startsWith('image/')) {
+          const file = item.getAsFile();
+          if (file) {
+            return new Promise((resolve) => {
+              const r = new FileReader();
+              r.onload = () => resolve(r.result as string);
+              r.onerror = () => resolve(null);
+              r.readAsDataURL(file);
+            });
+          }
+        }
+      }
+    }
+
+    // 3. HTML (Cuando se arrastra desde WhatsApp Web suele viajar un elemento <img>)
+    const html = dt.getData('text/html');
+    if (html) {
+      const match = html.match(/<img[^>]+src=["']([^"']+)["']/i);
+      if (match && match[1]) {
+        const src = match[1];
+        if (src.startsWith('data:image')) return src;
+        try {
+          return await convertUrlToBase64(src);
+        } catch {
+          // Fallback
+        }
+      }
+    }
+
+    // 4. URI-List o Texto plano (URL directa o blob)
+    const uri = dt.getData('text/uri-list') || dt.getData('text/plain');
+    if (uri && (uri.startsWith('blob:') || uri.startsWith('http') || uri.startsWith('data:image'))) {
+      if (uri.startsWith('data:image')) return uri;
+      try {
+        return await convertUrlToBase64(uri);
+      } catch {
+        // Fallback
+      }
+    }
+
+    return null;
+  };
+
+  const convertUrlToBase64 = (url: string): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        try {
+          const canvas = document.createElement('canvas');
+          canvas.width = img.naturalWidth || img.width;
+          canvas.height = img.naturalHeight || img.height;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) return reject('No canvas context');
+          ctx.fillStyle = '#FFFFFF';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.drawImage(img, 0, 0);
+          resolve(canvas.toDataURL('image/jpeg', 0.95));
+        } catch {
+          fetchBlobUrl(url).then(resolve).catch(reject);
+        }
+      };
+      img.onerror = () => {
+        fetchBlobUrl(url).then(resolve).catch(reject);
+      };
+      img.src = url;
+    });
+  };
+
+  const fetchBlobUrl = (url: string): Promise<string> => {
+    return fetch(url)
+      .then((res) => res.blob())
+      .then(
+        (blob) =>
+          new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result as string);
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+          })
+      );
+  };
+
+  // PREVENCIÓN GLOBAL: Impide que el navegador abra el archivo en una pestaña nueva
+  useEffect(() => {
+    const handleWindowDragOver = (e: DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.dataTransfer) {
+        e.dataTransfer.dropEffect = 'copy';
+      }
+    };
+
+    const handleWindowDrop = async (e: DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setDragHoverSide(null);
+
+      const dt = e.dataTransfer;
+      if (!dt) return;
+
+      const base64 = await extractBase64FromDataTransfer(dt);
+      if (base64) {
+        await processImagePayload(base64, focusedSide);
+      }
+    };
+
+    window.addEventListener('dragenter', handleWindowDragOver, false);
+    window.addEventListener('dragover', handleWindowDragOver, false);
+    window.addEventListener('drop', handleWindowDrop, false);
+
+    return () => {
+      window.removeEventListener('dragenter', handleWindowDragOver);
+      window.removeEventListener('dragover', handleWindowDragOver);
+      window.removeEventListener('drop', handleWindowDrop);
+    };
+  }, [focusedSide, processImagePayload]);
+
   // Pegado global (Ctrl + V / WhatsApp Web)
   useEffect(() => {
     const handlePaste = (e: ClipboardEvent) => {
@@ -240,42 +424,8 @@ export default function DniMatrixTab({ paquetes = [], clientes = [] }: DniMatrix
       const reader = new FileReader();
       reader.onload = async (event) => {
         const base64Data = event.target?.result as string;
-        if (!base64Data) return;
-
-        const currentId = activeSlotRef.current;
-        const currentSlot = getSlot(currentId);
-
-        let sideToAssign = focusedSide;
-        if (!sideToAssign) {
-          if (!currentSlot.anverso) {
-            sideToAssign = 'anverso';
-          } else if (!currentSlot.reverso) {
-            sideToAssign = 'reverso';
-          } else {
-            sideToAssign = 'anverso';
-          }
-        }
-
-        const rotKey = sideToAssign === 'anverso' ? 'anversoRotation' : 'reversoRotation';
-        const updatedSlot: DniSlotData = {
-          ...currentSlot,
-          [sideToAssign]: base64Data,
-          [rotKey]: 0
-        };
-
-        await updateSlot(updatedSlot);
-        const sideName = sideToAssign === 'anverso' ? 'Anverso' : 'Reverso';
-        showToast(`${sideName} pegado en Expediente #${padNum(currentId)}`, 'success');
-
-        const isNowComplete = Boolean(updatedSlot.anverso && updatedSlot.reverso);
-        if (isNowComplete) {
-          playSound('complete');
-          setTimeout(() => {
-            jumpToNextIncompleteSlot();
-          }, 350);
-        } else {
-          playSound('paste');
-          setFocusedSide('reverso');
+        if (base64Data) {
+          await processImagePayload(base64Data, focusedSide);
         }
       };
 
@@ -284,7 +434,7 @@ export default function DniMatrixTab({ paquetes = [], clientes = [] }: DniMatrix
 
     window.addEventListener('paste', handlePaste);
     return () => window.removeEventListener('paste', handlePaste);
-  }, [focusedSide, getSlot, updateSlot, showToast, playSound, jumpToNextIncompleteSlot]);
+  }, [focusedSide, processImagePayload]);
 
   // Atajos de teclado (Enter, Flechas, R)
   useEffect(() => {
@@ -592,14 +742,55 @@ export default function DniMatrixTab({ paquetes = [], clientes = [] }: DniMatrix
               </span>
             </div>
 
-            <div className="sheet-surface">
+            <div
+              className="sheet-surface"
+              onDragOver={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                e.dataTransfer.dropEffect = 'copy';
+              }}
+              onDrop={async (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setDragHoverSide(null);
+                const b64 = await extractBase64FromDataTransfer(e.dataTransfer);
+                if (b64) {
+                  await processImagePayload(b64, focusedSide);
+                }
+              }}
+            >
               {/* CASILLA ANVERSO (SUPERIOR) */}
               <div
                 className={`dni-dropzone ${activeSlot.anverso ? 'has-image' : ''} ${
                   focusedSide === 'anverso' ? 'active-target' : ''
-                }`}
+                } ${dragHoverSide === 'anverso' ? 'drag-active' : ''}`}
                 tabIndex={0}
                 onClick={() => setFocusedSide('anverso')}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  e.dataTransfer.dropEffect = 'copy';
+                  if (dragHoverSide !== 'anverso') setDragHoverSide('anverso');
+                }}
+                onDragEnter={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setDragHoverSide('anverso');
+                }}
+                onDragLeave={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setDragHoverSide(null);
+                }}
+                onDrop={async (e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setDragHoverSide(null);
+                  const b64 = await extractBase64FromDataTransfer(e.dataTransfer);
+                  if (b64) {
+                    await processImagePayload(b64, 'anverso');
+                  }
+                }}
               >
                 <div className="dropzone-header">
                   <div className="dropzone-title">
@@ -698,9 +889,34 @@ export default function DniMatrixTab({ paquetes = [], clientes = [] }: DniMatrix
               <div
                 className={`dni-dropzone ${activeSlot.reverso ? 'has-image' : ''} ${
                   focusedSide === 'reverso' ? 'active-target' : ''
-                }`}
+                } ${dragHoverSide === 'reverso' ? 'drag-active' : ''}`}
                 tabIndex={0}
                 onClick={() => setFocusedSide('reverso')}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  e.dataTransfer.dropEffect = 'copy';
+                  if (dragHoverSide !== 'reverso') setDragHoverSide('reverso');
+                }}
+                onDragEnter={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setDragHoverSide('reverso');
+                }}
+                onDragLeave={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setDragHoverSide(null);
+                }}
+                onDrop={async (e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setDragHoverSide(null);
+                  const b64 = await extractBase64FromDataTransfer(e.dataTransfer);
+                  if (b64) {
+                    await processImagePayload(b64, 'reverso');
+                  }
+                }}
               >
                 <div className="dropzone-header">
                   <div className="dropzone-title">

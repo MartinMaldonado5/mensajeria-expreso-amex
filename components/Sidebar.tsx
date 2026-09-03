@@ -102,7 +102,7 @@ export default function Sidebar({
         </div>
 
         {/* SUBMÓDULOS EN ORDEN OPERATIVO */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', paddingBottom: '60px' }}>
           {navItem('dashboard', 'fa-solid fa-chart-pie', '1. Panel Operativo')}
           {navItem('live-sheets', 'fa-solid fa-table-list', '⚡ Cotejo & Pistoleo Live (Sheets)')}
           {navItem('mm-lince', 'fa-solid fa-store', '2. Almacén Central (Lince)')}

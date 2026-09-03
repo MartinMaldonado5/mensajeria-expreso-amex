@@ -56,11 +56,12 @@
   font-family: var(--font-sans);
   background-color: var(--bg-main);
   color: var(--text-primary);
-  min-height: calc(100vh - 80px);
+  min-height: 100%;
+  height: auto;
   display: flex;
   flex-direction: column;
   border-radius: 12px;
-  overflow: hidden;
+  overflow: visible;
   -webkit-font-smoothing: antialiased;
   margin: -16px;
   position: relative;
@@ -500,11 +501,13 @@ kbd {
 }
 
 .dni-dropzone:focus,
-.dni-dropzone.active-target {
+.dni-dropzone.active-target,
+.dni-dropzone.drag-active {
   outline: none;
-  border-color: var(--accent-cyan);
-  border-style: solid;
-  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.25), 0 8px 24px rgba(0, 0, 0, 0.4);
+  border-color: var(--accent-cyan) !important;
+  border-style: solid !important;
+  box-shadow: 0 0 0 4px rgba(56, 189, 248, 0.35), 0 8px 24px rgba(0, 0, 0, 0.4) !important;
+  background: var(--bg-card-hover) !important;
 }
 
 .dni-dropzone.has-image {
@@ -730,9 +733,10 @@ kbd {
   display: flex;
   flex-direction: column;
   box-shadow: var(--shadow-md);
-  height: calc(100vh - 120px);
+  min-height: 540px;
+  max-height: calc(100vh - 100px);
   position: sticky;
-  top: 90px;
+  top: 10px;
 }
 
 .matrix-header {
@@ -832,6 +836,8 @@ kbd {
 .matrix-grid-scroll {
   flex: 1;
   overflow-y: auto;
+  min-height: 180px;
+  max-height: 380px;
   padding-right: 6px;
   margin: 10px 0;
 }
