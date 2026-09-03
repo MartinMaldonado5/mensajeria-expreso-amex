@@ -49,7 +49,7 @@ export default function Sidebar({
       {/* Encabezado Móvil con Botón Cerrar (Oculto en PC vía CSS) */}
       <div className="sidebar-mobile-header">
         <span style={{ fontSize: '13px', fontWeight: 900, color: '#f8fafc', display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <i className="fa-solid fa-warehouse" style={{ color: '#38bdf8' }}></i> Operaciones y Almacenes
+          <i className="fa-solid fa-boxes-stacked" style={{ color: '#38bdf8' }}></i> AMEX COURIER SISTEMA
         </span>
         <button
           onClick={onCloseSidebar}
@@ -73,13 +73,12 @@ export default function Sidebar({
         </button>
       </div>
 
-      {/* SECCIÓN ÚNICA EXCLUSIVA: OPERACIONES Y ALMACENES */}
+      {/* SECCIÓN ÚNICA EXCLUSIVA: MÓDULOS DEL SISTEMA */}
       <div style={{ padding: '8px 10px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
         <div
           style={{
             display: 'flex',
             alignItems: 'center',
-            justifyContent: 'space-between',
             padding: '10px 12px',
             background: 'linear-gradient(135deg, rgba(37, 99, 235, 0.28) 0%, rgba(30, 64, 175, 0.28) 100%)',
             border: '1.5px solid rgba(59, 130, 246, 0.5)',
@@ -94,10 +93,7 @@ export default function Sidebar({
           }}
         >
           <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <i className="fa-solid fa-warehouse" style={{ color: '#38bdf8' }}></i> Operaciones y Almacenes
-          </span>
-          <span style={{ fontSize: '9px', background: '#2563eb', color: '#ffffff', padding: '2px 6px', borderRadius: '4px', fontWeight: 900 }}>
-            EN VIVO
+            <i className="fa-solid fa-boxes-stacked" style={{ color: '#38bdf8' }}></i> Módulos del Sistema
           </span>
         </div>
 

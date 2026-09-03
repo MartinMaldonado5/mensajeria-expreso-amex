@@ -45,31 +45,13 @@ export default function HeaderBar({
         >
           <i className={`fa-solid ${isSidebarCollapsed ? 'fa-bars' : 'fa-xmark'}`}></i>
         </button>
-        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 900, fontSize: '15.5px', letterSpacing: '0.3px', color: '#ffffff' }}>
-          AMEX Courier <span style={{ color: '#38bdf8', fontWeight: 600, fontSize: '13px' }}>| Operaciones & Almacenes</span>
+        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 900, fontSize: '16px', letterSpacing: '0.4px', color: '#ffffff' }}>
+          AMEX COURIER SISTEMA
         </span>
       </div>
 
-      {/* Sección derecha con estado de sincronización en tiempo real y botón de recarga */}
+      {/* Sección derecha con botón de sincronización */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: 'auto', paddingRight: '8px' }}>
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-            background: 'rgba(34, 197, 94, 0.15)',
-            border: '1px solid rgba(34, 197, 94, 0.35)',
-            padding: '3px 8px',
-            borderRadius: '12px',
-            color: '#4ade80',
-            fontSize: '11px',
-            fontWeight: 800
-          }}
-          className="hide-mobile"
-        >
-          <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#22c55e', display: 'inline-block', boxShadow: '0 0 6px #22c55e' }} />
-          <span>Realtime Supabase</span>
-        </div>
 
         {onGlobalRefresh && (
           <button

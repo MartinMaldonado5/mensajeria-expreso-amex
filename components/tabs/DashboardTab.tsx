@@ -193,7 +193,7 @@ export default function DashboardTab({
                 }}
               >
                 <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#10b981', display: 'inline-block' }} />
-                Lince Hub En Vivo
+                Lince Hub Activo
               </span>
             </div>
             <p style={{ fontSize: '11.5px', color: '#64748b', margin: '2px 0 0 0' }}>
