@@ -437,7 +437,7 @@ export default function DniMatrixTab({ paquetes = [], clientes = [] }: DniMatrix
       <header className="app-header">
         <div className="header-brand">
           <div className="brand-icon">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <rect x="2" y="4" width="20" height="16" rx="3" />
               <line x1="6" y1="9" x2="10" y2="9" />
               <line x1="6" y1="12" x2="12" y2="12" />
@@ -495,12 +495,12 @@ export default function DniMatrixTab({ paquetes = [], clientes = [] }: DniMatrix
             title={soundEnabled ? 'Silenciar sonidos' : 'Activar sonidos'}
           >
             {soundEnabled ? (
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
                 <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
               </svg>
             ) : (
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
                 <line x1="23" y1="9" x2="17" y2="15"></line>
                 <line x1="17" y1="9" x2="23" y2="15"></line>
@@ -509,7 +509,7 @@ export default function DniMatrixTab({ paquetes = [], clientes = [] }: DniMatrix
           </button>
 
           <button onClick={() => setShowConfigModal(true)} className="btn btn-secondary" title="Ajustes de lote y cupos">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <circle cx="12" cy="12" r="3"></circle>
               <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
             </svg>
@@ -517,7 +517,7 @@ export default function DniMatrixTab({ paquetes = [], clientes = [] }: DniMatrix
           </button>
 
           <button onClick={() => setShowPreviewModal(true)} className="btn btn-secondary" title="Vista de impresión A4">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
               <circle cx="12" cy="12" r="3"></circle>
             </svg>
@@ -525,7 +525,7 @@ export default function DniMatrixTab({ paquetes = [], clientes = [] }: DniMatrix
           </button>
 
           <button onClick={() => setShowPdfModal(true)} className="btn btn-pdf-header" title="Convertir archivos Word a PDF">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
               <polyline points="14 2 14 8 20 8"></polyline>
               <line x1="9" y1="15" x2="15" y2="15"></line>
@@ -658,7 +658,7 @@ export default function DniMatrixTab({ paquetes = [], clientes = [] }: DniMatrix
                 ) : (
                   <div className="dropzone-placeholder">
                     <div className="placeholder-icon">
-                      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                         <path d="M16 16v1a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h1" />
                         <rect x="8" y="3" width="12" height="14" rx="2" />
                         <path d="M12 8v4" />
@@ -686,7 +686,7 @@ export default function DniMatrixTab({ paquetes = [], clientes = [] }: DniMatrix
                   onClick={swapSides}
                   title="Intercambiar Anverso y Reverso si se pegaron invertidos"
                 >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <path d="M7 16V4m0 0L3 8m4-4l4 4m6 4v12m0 0l4-4m-4 4l-4-4" />
                   </svg>
                   <span>Intercambiar Caras</span>
@@ -759,7 +759,7 @@ export default function DniMatrixTab({ paquetes = [], clientes = [] }: DniMatrix
                 ) : (
                   <div className="dropzone-placeholder">
                     <div className="placeholder-icon">
-                      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                         <path d="M16 16v1a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h1" />
                         <rect x="8" y="3" width="12" height="14" rx="2" />
                         <path d="M12 8v4" />
@@ -793,7 +793,7 @@ export default function DniMatrixTab({ paquetes = [], clientes = [] }: DniMatrix
               }}
               title="Ir al cupo anterior (Flecha Izquierda)"
             >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <polyline points="15 18 9 12 15 6"></polyline>
               </svg>
               <span>
@@ -821,7 +821,7 @@ export default function DniMatrixTab({ paquetes = [], clientes = [] }: DniMatrix
               <span>
                 Siguiente <kbd>&rarr;</kbd>
               </span>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <polyline points="9 18 15 12 9 6"></polyline>
               </svg>
             </button>
@@ -952,7 +952,7 @@ export default function DniMatrixTab({ paquetes = [], clientes = [] }: DniMatrix
           {/* SECCIÓN DE EXPORTACIÓN INMEDIATA */}
           <div className="matrix-export-card">
             <div className="export-card-title">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
                 <polyline points="14 2 14 8 20 8"></polyline>
                 <line x1="12" y1="18" x2="12" y2="12"></line>
@@ -974,7 +974,7 @@ export default function DniMatrixTab({ paquetes = [], clientes = [] }: DniMatrix
                 onClick={handleExportFolder}
                 title="Haz clic para elegir una carpeta en tu equipo y guardar todos los archivos Word sueltos sin comprimir"
               >
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
                   <polyline points="12 11 12 17 15 14"></polyline>
                   <line x1="9" y1="14" x2="12" y2="17"></line>
@@ -992,7 +992,7 @@ export default function DniMatrixTab({ paquetes = [], clientes = [] }: DniMatrix
                   disabled={isExporting || stats.ready === 0}
                   onClick={handleExportMaster}
                 >
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
                     <polyline points="14 2 14 8 20 8"></polyline>
                   </svg>
@@ -1008,7 +1008,7 @@ export default function DniMatrixTab({ paquetes = [], clientes = [] }: DniMatrix
                   disabled={isExporting || stats.ready === 0}
                   onClick={handleExportZip}
                 >
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <polyline points="21 8 21 21 3 21 3 8"></polyline>
                     <rect x="1" y="3" width="22" height="5"></rect>
                     <line x1="10" y1="12" x2="14" y2="12"></line>
@@ -1036,7 +1036,7 @@ export default function DniMatrixTab({ paquetes = [], clientes = [] }: DniMatrix
                 onClick={() => setShowPdfModal(true)}
                 title="Convertir los archivos Word a PDF"
               >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2">
                   <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
                   <polyline points="14 2 14 8 20 8"></polyline>
                   <line x1="9" y1="15" x2="15" y2="15"></line>
@@ -1094,7 +1094,7 @@ export default function DniMatrixTab({ paquetes = [], clientes = [] }: DniMatrix
                 <label>Acciones de Limpieza:</label>
                 <p className="text-muted">¿Deseas iniciar un lote completamente nuevo de expedientes?</p>
                 <button onClick={handleClearAllData} className="btn btn-danger" type="button">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <polyline points="3 6 5 6 21 6"></polyline>
                     <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
                   </svg>
@@ -1256,7 +1256,7 @@ export default function DniMatrixTab({ paquetes = [], clientes = [] }: DniMatrix
 
               {pdfScanCount !== null && (
                 <div className="pdf-scan-badge" style={{ marginBottom: '14px' }}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="2">
                     <polyline points="20 6 9 17 4 12"></polyline>
                   </svg>
                   <span>
@@ -1291,7 +1291,7 @@ export default function DniMatrixTab({ paquetes = [], clientes = [] }: DniMatrix
 
               {pdfSuccessDone && (
                 <div className="pdf-success-card">
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="2">
                     <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
                     <polyline points="22 4 12 14.01 9 11.01"></polyline>
                   </svg>
