@@ -107,7 +107,7 @@ export default function Sidebar({
           {navItem('shp-deliveries', 'fa-solid fa-car-side', '5. Despacho Carro AMEX')}
           {navItem('wms-picking', 'fa-solid fa-clipboard-list', '6. Picking Shalom/Olva')}
           {navItem('mobile-scanner', 'fa-solid fa-barcode', '7. Escáner de Códigos')}
-          {navItem('dni-matrix', 'fa-solid fa-id-card', '8. 🪪 DNI Matrix Express')}
+          {navItem('dni-matrix', 'fa-solid fa-id-card', '8. 🪪 Procesador de DNI')}
         </div>
       </div>
     </nav>

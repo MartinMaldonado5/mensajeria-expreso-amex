@@ -724,8 +724,8 @@ export default function DniMatrixTab({ paquetes = [], clientes = [] }: DniMatrix
             </svg>
           </div>
           <div>
-            <h1 className="brand-title">DNI MATRIX EXPRESS</h1>
-            <span className="brand-subtitle">Procesador Masivo de DNI por Cupos (WhatsApp Web &rarr; Word A4)</span>
+            <h1 className="brand-title">PROCESADOR DE DNI</h1>
+            <span className="brand-subtitle">Gestión Masiva de DNI por Cupos (WhatsApp Web &rarr; Word / PDF A4)</span>
           </div>
         </div>
 

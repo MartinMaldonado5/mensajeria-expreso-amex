@@ -281,14 +281,14 @@ export async function exportMasterDocx(
   onProgress?.('Generando archivo final (.docx)...');
 
   const doc = new Document({
-    title: `Lote DNI Matrix Express - ${completeSlots.length} Expedientes`,
-    creator: 'Amex Courier ERP - DNI Matrix Express',
+    title: `Lote Procesador de DNI - ${completeSlots.length} Expedientes`,
+    creator: 'AMEX COURIER SISTEMA - Procesador de DNI',
     sections
   });
 
   const blob = await Packer.toBlob(doc);
   const dateStr = new Date().toISOString().slice(0, 10);
-  const filename = `DNI_Matrix_Maestro_${completeSlots.length}_Expedientes_${dateStr}.docx`;
+  const filename = `DNI_Procesador_${completeSlots.length}_Expedientes_${dateStr}.docx`;
 
   saveAs(blob, filename);
   onProgress?.('¡Descarga completada!');
@@ -319,7 +319,7 @@ export async function exportZipDocx(
 
     const doc = new Document({
       title: `Expediente #${slot.id}`,
-      creator: 'Amex Courier ERP - DNI Matrix Express',
+      creator: 'AMEX COURIER SISTEMA - Procesador de DNI',
       sections: [
         {
           properties: {
@@ -401,7 +401,7 @@ export async function exportToDirectoryFolder(
     const children = await buildExpedienteChildren(slot, sizePreset);
     const doc = new Document({
       title: `Expediente #${slot.id}`,
-      creator: 'Amex Courier ERP - DNI Matrix Express',
+      creator: 'AMEX COURIER SISTEMA - Procesador de DNI',
       sections: [
         {
           properties: {
