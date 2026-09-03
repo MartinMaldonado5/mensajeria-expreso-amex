@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import './dni-matrix.css';
 import { dniDb, DniSlotData } from '@/lib/dni-matrix/db';
 import { exportMasterDocx, exportZipDocx, exportToDirectoryFolder } from '@/lib/dni-matrix/docx-exporter';
+import { convertDocxFolderToPdf, exportPdfZip } from '@/lib/dni-matrix/pdf-converter';
 import { Paquete, Cliente } from '@/types';
 
 interface DniMatrixTabProps {
@@ -39,12 +40,16 @@ export default function DniMatrixTab({ paquetes = [], clientes = [] }: DniMatrix
   const [exportStatusMessage, setExportStatusMessage] = useState<string>('');
 
   // Estados de Conversor PDF
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [pdfDirHandle, setPdfDirHandle] = useState<any>(null);
+  const [pdfDestOption, setPdfDestOption] = useState<'subfolder' | 'same'>('subfolder');
   const [pdfFolderPath, setPdfFolderPath] = useState<string>('');
   const [pdfScanCount, setPdfScanCount] = useState<number | null>(null);
   const [pdfConverting, setPdfConverting] = useState<boolean>(false);
   const [pdfProgressMsg, setPdfProgressMsg] = useState<string>('');
   const [pdfProgressPercent, setPdfProgressPercent] = useState<number>(0);
   const [pdfSuccessDone, setPdfSuccessDone] = useState<boolean>(false);
+  const [pdfConvertedInfo, setPdfConvertedInfo] = useState<{ total: number; dest: string } | null>(null);
 
   const activeSlotRef = useRef<number>(activeSlotId);
   activeSlotRef.current = activeSlotId;
@@ -567,6 +572,112 @@ export default function DniMatrixTab({ paquetes = [], clientes = [] }: DniMatrix
     } finally {
       setIsExporting(false);
       setExportStatusMessage('');
+    }
+  };
+
+  // Exportar directamente a ZIP con archivos PDF A4
+  const handleExportPdfZip = async () => {
+    const completed = Object.values(slotsData).filter((s) => s.anverso && s.reverso);
+    if (completed.length === 0) {
+      showToast('No hay expedientes completos para exportar.', 'error');
+      return;
+    }
+    try {
+      setIsExporting(true);
+      setExportStatusMessage('Generando PDFs A4 milimétricos...');
+      await exportPdfZip(completed, (curr, tot) => {
+        setExportStatusMessage(`Generando PDF ${curr} de ${tot}...`);
+      });
+      showToast(`¡${completed.length} archivos PDF generados y descargados en ZIP!`, 'success');
+      playSound('complete');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Error al exportar PDF';
+      showToast(msg, 'error');
+    } finally {
+      setIsExporting(false);
+      setExportStatusMessage('');
+    }
+  };
+
+  // Manejador de Explorar Carpeta para Conversión a PDF
+  const handlePickPdfFolder = async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const w = window as any;
+    if (!w.showDirectoryPicker) {
+      showToast('Tu navegador no soporta el explorador de carpetas nativo. Usa Chrome o Edge.', 'error');
+      return;
+    }
+    try {
+      const handle = await w.showDirectoryPicker({
+        id: 'dni_convert_pdf_folder',
+        mode: 'readwrite'
+      });
+      setPdfDirHandle(handle);
+      setPdfFolderPath(handle.name);
+      setPdfSuccessDone(false);
+      setPdfConvertedInfo(null);
+
+      let count = 0;
+      for await (const entry of handle.values()) {
+        if (
+          entry.kind === 'file' &&
+          entry.name.toLowerCase().endsWith('.docx') &&
+          !entry.name.startsWith('~$')
+        ) {
+          count++;
+        }
+      }
+      setPdfScanCount(count);
+      if (count === 0) {
+        showToast(`No se encontraron archivos .docx en la carpeta "${handle.name}"`, 'info');
+      } else {
+        showToast(`${count} archivos Word (.docx) detectados en "${handle.name}"`, 'success');
+      }
+    } catch (err: any) {
+      if (err.name !== 'AbortError') {
+        showToast('Error al seleccionar carpeta: ' + (err?.message || ''), 'error');
+      }
+    }
+  };
+
+  // Iniciar la Conversión Real de DOCX a PDF y escribir directamente los archivos
+  const handleStartPdfConversion = async () => {
+    if (!pdfDirHandle) {
+      showToast('Primero haz clic en "Examinar..." para seleccionar la carpeta donde están los Word', 'error');
+      return;
+    }
+    if (pdfScanCount === 0) {
+      showToast('La carpeta seleccionada no tiene archivos .docx válidos', 'error');
+      return;
+    }
+
+    try {
+      setPdfConverting(true);
+      setPdfSuccessDone(false);
+      setPdfConvertedInfo(null);
+      setPdfProgressPercent(5);
+      setPdfProgressMsg('Escaneando archivos Word (.docx)...');
+
+      const result = await convertDocxFolderToPdf(
+        pdfDirHandle,
+        pdfDestOption === 'same',
+        (curr, total, filename) => {
+          const pct = Math.round((curr / total) * 100);
+          setPdfProgressPercent(pct);
+          setPdfProgressMsg(`Convirtiendo ${curr} de ${total}: ${filename}`);
+        }
+      );
+
+      setPdfProgressPercent(100);
+      setPdfProgressMsg('¡Conversión finalizada con éxito!');
+      setPdfConverting(false);
+      setPdfSuccessDone(true);
+      setPdfConvertedInfo({ total: result.total, dest: result.destFolder });
+      playSound('complete');
+      showToast(`¡${result.total} archivos PDF creados exitosamente en "${result.destFolder}"!`, 'success');
+    } catch (err: any) {
+      setPdfConverting(false);
+      showToast(err.message || 'Error al convertir a PDF', 'error');
     }
   };
 
@@ -1218,7 +1329,7 @@ export default function DniMatrixTab({ paquetes = [], clientes = [] }: DniMatrix
                   </div>
                 </button>
 
-                {/* Opción 3: Descargar ZIP */}
+                {/* Opción 3: Descargar ZIP Word */}
                 <button
                   className="btn btn-secondary btn-export"
                   disabled={isExporting || stats.ready === 0}
@@ -1231,7 +1342,29 @@ export default function DniMatrixTab({ paquetes = [], clientes = [] }: DniMatrix
                   </svg>
                   <div className="btn-text-block">
                     <span className="btn-title">Descargar en ZIP</span>
-                    <span className="btn-desc">Carpeta comprimida .zip</span>
+                    <span className="btn-desc">Archivos .docx comprimidos</span>
+                  </div>
+                </button>
+
+                {/* Opción 4: Descargar en PDF (.zip) */}
+                <button
+                  className="btn btn-export"
+                  style={{
+                    background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.18) 0%, rgba(220, 38, 38, 0.25) 100%)',
+                    borderColor: 'rgba(239, 68, 68, 0.45)',
+                    color: '#fca5a5'
+                  }}
+                  disabled={isExporting || stats.ready === 0}
+                  onClick={handleExportPdfZip}
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                    <polyline points="14 2 14 8 20 8"></polyline>
+                    <line x1="9" y1="15" x2="15" y2="15"></line>
+                  </svg>
+                  <div className="btn-text-block">
+                    <span className="btn-title" style={{ color: '#ffffff' }}>Descargar en PDF (.zip)</span>
+                    <span className="btn-desc" style={{ color: '#fca5a5' }}>Archivos .pdf directos</span>
                   </div>
                 </button>
               </div>
@@ -1250,14 +1383,14 @@ export default function DniMatrixTab({ paquetes = [], clientes = [] }: DniMatrix
                 style={{ width: '100%', borderColor: 'rgba(239, 68, 68, 0.35)', color: '#fca5a5' }}
                 type="button"
                 onClick={() => setShowPdfModal(true)}
-                title="Convertir los archivos Word a PDF"
+                title="Convertir una carpeta existente de archivos Word a PDF"
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2">
                   <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
                   <polyline points="14 2 14 8 20 8"></polyline>
                   <line x1="9" y1="15" x2="15" y2="15"></line>
                 </svg>
-                <span>Conversor DOCX a PDF</span>
+                <span>Conversor Masivo DOCX a PDF</span>
               </button>
             </div>
 
@@ -1265,7 +1398,7 @@ export default function DniMatrixTab({ paquetes = [], clientes = [] }: DniMatrix
             {isExporting && (
               <div className="export-loading">
                 <div className="spinner"></div>
-                <span>{exportStatusMessage || 'Generando documento Word...'}</span>
+                <span>{exportStatusMessage || 'Generando documento...'}</span>
               </div>
             )}
           </div>
@@ -1307,20 +1440,23 @@ export default function DniMatrixTab({ paquetes = [], clientes = [] }: DniMatrix
               <hr className="modal-divider" />
 
               <div className="form-group">
-                <label>Acciones de Limpieza:</label>
-                <p className="text-muted">¿Deseas iniciar un lote completamente nuevo de expedientes?</p>
-                <button onClick={handleClearAllData} className="btn btn-danger" type="button">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <polyline points="3 6 5 6 21 6"></polyline>
-                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                  </svg>
-                  <span>Borrar Todo y Empezar Nuevo Lote</span>
+                <label className="text-danger font-bold">Zona de Peligro:</label>
+                <p className="text-muted" style={{ fontSize: '0.8rem', marginTop: '4px' }}>
+                  Borra todos los DNIs, números y fotos guardadas en este navegador para iniciar un nuevo lote de trabajo.
+                </p>
+                <button
+                  type="button"
+                  onClick={handleClearAllData}
+                  className="btn btn-secondary"
+                  style={{ borderColor: 'rgba(239, 68, 68, 0.4)', color: '#f87171', marginTop: '8px' }}
+                >
+                  🗑️ Borrar Todos los Datos del Lote
                 </button>
               </div>
             </div>
             <div className="modal-footer">
-              <button onClick={() => setShowConfigModal(false)} className="btn btn-primary">
-                Guardar y Cerrar
+              <button onClick={() => setShowConfigModal(false)} className="btn btn-secondary">
+                Cerrar
               </button>
             </div>
           </div>
@@ -1333,73 +1469,121 @@ export default function DniMatrixTab({ paquetes = [], clientes = [] }: DniMatrix
           <div className="modal-card modal-large">
             <div className="modal-header">
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <h3>Vista Previa de Impresión A4</h3>
-                <span
-                  style={{
-                    background: 'rgba(56, 189, 248, 0.15)',
-                    color: '#38bdf8',
-                    padding: '2px 8px',
-                    borderRadius: '4px',
-                    fontSize: '0.75rem',
-                    fontWeight: 700
-                  }}
-                >
-                  Expediente #{padNum(activeSlotId)}
-                </span>
+                <h3>Vista Previa Impresión A4</h3>
+                <span className="badge badge-ready">Expediente #{padNum(activeSlotId)}</span>
               </div>
               <button onClick={() => setShowPreviewModal(false)} className="modal-close-btn">
                 &times;
               </button>
             </div>
-            <div className="modal-body preview-modal-body">
-              <div className="a4-sheet-preview-wrapper">
-                <div className="a4-sheet-preview">
-                  <div className="a4-margin-guides">
-                    <div className="a4-image-slot">
-                      {activeSlot.anverso ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={activeSlot.anverso}
-                          alt="Anverso"
-                          style={{
-                            transform: `rotate(${activeSlot.anversoRotation || 0}deg)`
-                          }}
-                        />
-                      ) : (
-                        <span className="a4-empty-label">Anverso (12.0 &times; 7.5 cm)</span>
-                      )}
-                    </div>
-                    <div className="a4-separator-line">
-                      <span>Espaciado controlado (2.5 cm) - Eje medio (14.85 cm)</span>
-                    </div>
-                    <div className="a4-image-slot">
-                      {activeSlot.reverso ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={activeSlot.reverso}
-                          alt="Reverso"
-                          style={{
-                            transform: `rotate(${activeSlot.reversoRotation || 0}deg)`
-                          }}
-                        />
-                      ) : (
-                        <span className="a4-empty-label">Reverso (12.0 &times; 7.5 cm)</span>
-                      )}
-                    </div>
-                  </div>
+            <div className="modal-body" style={{ textAlign: 'center', background: '#0a0d14', padding: '24px' }}>
+              <div
+                style={{
+                  display: 'inline-block',
+                  background: '#ffffff',
+                  color: '#000000',
+                  width: '320px',
+                  height: '452px',
+                  padding: '24px 20px',
+                  boxShadow: '0 10px 40px rgba(0,0,0,0.8)',
+                  borderRadius: '4px',
+                  position: 'relative'
+                }}
+              >
+                {/* Cuadre Anverso */}
+                <div
+                  style={{
+                    width: '100%',
+                    height: '140px',
+                    border: '1.5px dashed #94a3b8',
+                    borderRadius: '4px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    overflow: 'hidden',
+                    background: '#f8fafc'
+                  }}
+                >
+                  {activeSlot.anverso ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={activeSlot.anverso}
+                      alt="Anverso"
+                      style={{
+                        maxWidth: '100%',
+                        maxHeight: '100%',
+                        objectFit: 'contain',
+                        transform: `rotate(${activeSlot.anversoRotation || 0}deg)`
+                      }}
+                    />
+                  ) : (
+                    <span style={{ fontSize: '11px', color: '#94a3b8' }}>Anverso (12.0 &times; 7.5 cm)</span>
+                  )}
+                </div>
+
+                {/* Separador */}
+                <div
+                  style={{
+                    margin: '28px 0',
+                    borderTop: '1px dotted #cbd5e1',
+                    position: 'relative'
+                  }}
+                >
+                  <span
+                    style={{
+                      position: 'absolute',
+                      top: '-9px',
+                      left: '50%',
+                      transform: 'translateX(-50%)',
+                      background: '#fff',
+                      padding: '0 8px',
+                      fontSize: '9px',
+                      color: '#94a3b8'
+                    }}
+                  >
+                    Separación 2.5 cm
+                  </span>
+                </div>
+
+                {/* Cuadre Reverso */}
+                <div
+                  style={{
+                    width: '100%',
+                    height: '140px',
+                    border: '1.5px dashed #94a3b8',
+                    borderRadius: '4px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    overflow: 'hidden',
+                    background: '#f8fafc'
+                  }}
+                >
+                  {activeSlot.reverso ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={activeSlot.reverso}
+                      alt="Reverso"
+                      style={{
+                        maxWidth: '100%',
+                        maxHeight: '100%',
+                        objectFit: 'contain',
+                        transform: `rotate(${activeSlot.reversoRotation || 0}deg)`
+                      }}
+                    />
+                  ) : (
+                    <span style={{ fontSize: '11px', color: '#94a3b8' }}>Reverso (12.0 &times; 7.5 cm)</span>
+                  )}
                 </div>
               </div>
             </div>
             <div className="modal-footer">
-              <span className="text-muted">Garantizado: 1 sola página exacta por expediente en Word A4.</span>
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <button type="button" onClick={() => window.print()} className="btn btn-primary">
-                  Imprimir Hoja
-                </button>
-                <button onClick={() => setShowPreviewModal(false)} className="btn btn-secondary">
-                  Cerrar
-                </button>
-              </div>
+              <span className="text-muted" style={{ fontSize: '0.8rem' }}>
+                Medidas exactas para impresión física en hoja A4 (21.0 &times; 29.7 cm).
+              </span>
+              <button onClick={() => setShowPreviewModal(false)} className="btn btn-secondary">
+                Cerrar
+              </button>
             </div>
           </div>
         </div>
@@ -1414,15 +1598,15 @@ export default function DniMatrixTab({ paquetes = [], clientes = [] }: DniMatrix
                 <h3>Conversor Masivo de Word (.docx) a PDF</h3>
                 <span
                   style={{
-                    background: 'rgba(239, 68, 68, 0.2)',
-                    color: '#f87171',
+                    background: 'rgba(16, 185, 129, 0.2)',
+                    color: '#34d399',
                     padding: '2px 8px',
                     borderRadius: '4px',
                     fontSize: '0.75rem',
                     fontWeight: 700
                   }}
                 >
-                  Motor Microsoft Word
+                  Motor Directo A4
                 </span>
               </div>
               <button onClick={() => setShowPdfModal(false)} className="modal-close-btn">
@@ -1437,33 +1621,14 @@ export default function DniMatrixTab({ paquetes = [], clientes = [] }: DniMatrix
                     type="text"
                     className="metadata-input"
                     style={{ flex: 1 }}
-                    placeholder="Pega la ruta de la carpeta (ej: C:\Users\Edinson\Downloads\Expedientes)..."
+                    readOnly
+                    placeholder="Haz clic en Examinar para seleccionar tu carpeta..."
                     value={pdfFolderPath}
-                    onChange={(e) => setPdfFolderPath(e.target.value)}
                   />
                   <button
                     type="button"
                     className="btn btn-secondary"
-                    onClick={async () => {
-                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                      const w = window as any;
-                      if (w.showDirectoryPicker) {
-                        try {
-                          const handle = await w.showDirectoryPicker();
-                          setPdfFolderPath(handle.name);
-                          // Contar archivos .docx en memoria
-                          let count = 0;
-                          for await (const entry of handle.values()) {
-                            if (entry.kind === 'file' && entry.name.endsWith('.docx')) {
-                              count++;
-                            }
-                          }
-                          setPdfScanCount(count);
-                        } catch {
-                          // Usuario canceló
-                        }
-                      }
-                    }}
+                    onClick={handlePickPdfFolder}
                   >
                     Examinar...
                   </button>
@@ -1485,10 +1650,24 @@ export default function DniMatrixTab({ paquetes = [], clientes = [] }: DniMatrix
                 <label className="form-label font-bold">2. Destino de los PDFs generados:</label>
                 <div className="radio-option-group">
                   <label className="radio-label">
-                    <input type="radio" name="pdf-dest" defaultChecked />
+                    <input
+                      type="radio"
+                      name="pdf-dest"
+                      checked={pdfDestOption === 'subfolder'}
+                      onChange={() => setPdfDestOption('subfolder')}
+                    />
                     <span>
-                      Crear una subcarpeta <code>PDFs/</code> dentro de esa misma carpeta
+                      Crear una subcarpeta <code>PDFs/</code> dentro de esa misma carpeta (Recomendado)
                     </span>
+                  </label>
+                  <label className="radio-label" style={{ marginTop: '8px' }}>
+                    <input
+                      type="radio"
+                      name="pdf-dest"
+                      checked={pdfDestOption === 'same'}
+                      onChange={() => setPdfDestOption('same')}
+                    />
+                    <span>Guardar en la misma carpeta (junto a los archivos Word)</span>
                   </label>
                 </div>
               </div>
@@ -1512,9 +1691,9 @@ export default function DniMatrixTab({ paquetes = [], clientes = [] }: DniMatrix
                     <polyline points="22 4 12 14.01 9 11.01"></polyline>
                   </svg>
                   <div>
-                    <h4 style={{ margin: 0, color: '#34d399', fontSize: '0.9rem' }}>¡Conversión a PDF Finalizada!</h4>
+                    <h4 style={{ margin: 0, color: '#34d399', fontSize: '0.9rem' }}>¡Conversión a PDF Finalizada con Éxito!</h4>
                     <p style={{ margin: '2px 0 0 0', fontSize: '0.78rem', color: '#94a3b8' }}>
-                      Todos los archivos Word han sido convertidos a formato PDF.
+                      Se han creado {pdfConvertedInfo?.total || pdfScanCount} archivos .pdf dentro de: <strong>{pdfConvertedInfo?.dest || 'la carpeta seleccionada'}</strong>.
                     </p>
                   </div>
                 </div>
@@ -1522,28 +1701,14 @@ export default function DniMatrixTab({ paquetes = [], clientes = [] }: DniMatrix
             </div>
             <div className="modal-footer">
               <span className="text-muted" style={{ fontSize: '0.74rem' }}>
-                💡 Tip: Requiere Word en Windows para conversión directa o puedes usar el servidor local en :3001
+                💡 Convierte los Word a PDF A4 con medidas exactas (12 &times; 7.5 cm) y guarda los archivos directamente en tu equipo.
               </span>
               <div style={{ display: 'flex', gap: '8px' }}>
                 <button
                   type="button"
                   className="btn btn-pdf-header"
-                  disabled={pdfConverting}
-                  onClick={() => {
-                    setPdfConverting(true);
-                    setPdfProgressPercent(10);
-                    setPdfProgressMsg('Iniciando motor Microsoft Word...');
-                    setTimeout(() => {
-                      setPdfProgressPercent(60);
-                      setPdfProgressMsg('Procesando páginas...');
-                      setTimeout(() => {
-                        setPdfProgressPercent(100);
-                        setPdfProgressMsg('¡Listo!');
-                        setPdfConverting(false);
-                        setPdfSuccessDone(true);
-                      }, 1000);
-                    }, 1000);
-                  }}
+                  disabled={pdfConverting || !pdfDirHandle || pdfScanCount === 0}
+                  onClick={handleStartPdfConversion}
                 >
                   {pdfConverting ? 'Convirtiendo...' : 'Iniciar Conversión a PDF'}
                 </button>
