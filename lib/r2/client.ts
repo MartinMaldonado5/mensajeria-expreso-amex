@@ -9,7 +9,7 @@ function getEnv(name: string, defaultValue: string = ''): string {
 }
 
 export function getR2Client(): S3Client {
-  let rawAccountId = getEnv('CLOUDFLARE_R2_ACCOUNT_ID');
+  const rawAccountId = getEnv('CLOUDFLARE_R2_ACCOUNT_ID');
   const accessKeyId = getEnv('CLOUDFLARE_R2_ACCESS_KEY_ID');
   const secretAccessKey = getEnv('CLOUDFLARE_R2_SECRET_ACCESS_KEY');
   const customEndpoint = getEnv('CLOUDFLARE_R2_ENDPOINT');

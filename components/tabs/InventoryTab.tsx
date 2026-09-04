@@ -2526,7 +2526,7 @@ export default function InventoryTab({
                       <td colSpan={8} style={{ textAlign: 'center', padding: '36px', color: '#94a3b8' }}>
                         <Settings style={{ width: '40px', height: '40px', margin: '0 auto 8px auto', color: '#cbd5e1' }} />
                         <div style={{ fontWeight: 800, color: '#64748b' }}>No hay posiciones de estantería configuradas</div>
-                        <p style={{ margin: '4px 0 0 0', fontSize: '12px' }}>Haz clic en "+ Crear Anaquel en Lote" para comenzar.</p>
+                        <p style={{ margin: '4px 0 0 0', fontSize: '12px' }}>Haz clic en &quot;+ Crear Anaquel en Lote&quot; para comenzar.</p>
                       </td>
                     </tr>
                   ) : (

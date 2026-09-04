@@ -522,7 +522,7 @@ export default function PickingTab({
       setIsSavingEditOrder(true);
 
       // 1. Procesar posibles nuevos códigos WR agregados
-      let updatedItems = [...editOrderItems];
+      const updatedItems = [...editOrderItems];
       if (editOrderNewWrs.trim()) {
         const tokens = editOrderNewWrs
           .split(/[\n,;\t ]+/)

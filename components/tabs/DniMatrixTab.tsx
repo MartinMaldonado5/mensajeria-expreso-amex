@@ -173,10 +173,17 @@ export default function DniMatrixTab({ paquetes = [], clientes = [] }: DniMatrix
       playSound('click');
       setActiveSlotId(nextId);
       setFocusedSide(null);
-      showToast(`Saltando a cupo pendiente #${padNum(nextId)}`, 'info');
+      showToast(`Avanzando a cupo pendiente #${padNum(nextId)}`, 'info');
     } else {
-      showToast('¡Felicidades! Todos los cupos están 100% completos.', 'success');
-      playSound('complete');
+      if (activeSlotRef.current < totalSlots) {
+        playSound('click');
+        setActiveSlotId(activeSlotRef.current + 1);
+        setFocusedSide(null);
+        showToast(`Avanzando a cupo #${padNum(activeSlotRef.current + 1)}`, 'info');
+      } else {
+        showToast('¡Felicidades! Todos los cupos están 100% completos.', 'success');
+        playSound('complete');
+      }
     }
   }, [slotsData, totalSlots, playSound, showToast]);
 
@@ -254,15 +261,17 @@ export default function DniMatrixTab({ paquetes = [], clientes = [] }: DniMatrix
       const isNowComplete = Boolean(updatedSlot.anverso && updatedSlot.reverso);
       if (isNowComplete) {
         playSound('complete');
-        setTimeout(() => {
-          jumpToNextIncompleteSlot();
-        }, 350);
+        setFocusedSide(null);
+        showToast(
+          `¡Expediente #${padNum(currentId)} completado (2 caras)! Presiona ENTER ⏎ para pasar al siguiente cupo`,
+          'success'
+        );
       } else {
         playSound('paste');
         setFocusedSide('reverso');
       }
     },
-    [focusedSide, getSlot, updateSlot, showToast, playSound, jumpToNextIncompleteSlot]
+    [focusedSide, getSlot, updateSlot, showToast, playSound]
   );
 
   const extractBase64FromDataTransfer = async (dt: DataTransfer): Promise<string | null> => {
@@ -801,7 +810,7 @@ export default function DniMatrixTab({ paquetes = [], clientes = [] }: DniMatrix
                 }`}
               >
                 {activeStatus === 'ready'
-                  ? 'COMPLETO (2/2)'
+                  ? 'COMPLETO (2/2) • Presiona ENTER ⏎'
                   : activeStatus === 'partial'
                   ? '1 CARA (1/2)'
                   : 'VACÍO (0/2)'}
@@ -816,6 +825,13 @@ export default function DniMatrixTab({ paquetes = [], clientes = [] }: DniMatrix
                 placeholder="Ej: 74839201 - Juan Perez"
                 value={activeSlot.label || ''}
                 onChange={(e) => updateSlot({ ...activeSlot, label: e.target.value })}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    (e.target as HTMLInputElement).blur();
+                    jumpToNextIncompleteSlot();
+                  }
+                }}
                 maxLength={60}
               />
               <button

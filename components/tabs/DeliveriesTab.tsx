@@ -556,7 +556,7 @@ export default function DeliveriesTab({
                 <div style={{ padding: '40px', textAlign: 'center', background: '#ffffff', borderRadius: '12px', border: '1px dashed #cbd5e1', color: '#94a3b8' }}>
                   <Truck style={{ width: '36px', height: '36px', margin: '0 auto 8px', color: '#cbd5e1' }} />
                   <p style={{ fontSize: '13px', fontWeight: 700, margin: 0 }}>No hay hojas de ruta creadas</p>
-                  <p style={{ fontSize: '11.5px', margin: '4px 0 0 0' }}>Haz clic en "+ Generar Hoja de Ruta" para armar los destinos del chofer.</p>
+                  <p style={{ fontSize: '11.5px', margin: '4px 0 0 0' }}>Haz clic en &quot;+ Generar Hoja de Ruta&quot; para armar los destinos del chofer.</p>
                 </div>
               ) : (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '12px' }}>
