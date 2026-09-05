@@ -39,6 +39,10 @@ export default function DniMatrixTab({ paquetes = [], clientes = [] }: DniMatrix
   // Estados de exportación
   const [isExporting, setIsExporting] = useState<boolean>(false);
   const [exportStatusMessage, setExportStatusMessage] = useState<string>('');
+  const [showExportMenu, setShowExportMenu] = useState<boolean>(false);
+  const exportMenuRef = useRef<HTMLDivElement>(null);
+  const [previewLayout, setPreviewLayout] = useState<'side-by-side' | 'vertical'>('side-by-side');
+  const [zoomImage, setZoomImage] = useState<{ url: string; title: string; rotation: number } | null>(null);
 
   // Estados de Conversor PDF
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -129,6 +133,21 @@ export default function DniMatrixTab({ paquetes = [], clientes = [] }: DniMatrix
     }
     initData();
   }, []);
+
+  // Cerrar menú desplegable al hacer clic fuera
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (exportMenuRef.current && !exportMenuRef.current.contains(event.target as Node)) {
+        setShowExportMenu(false);
+      }
+    }
+    if (showExportMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showExportMenu]);
 
   const padNum = (num: number): string => String(num).padStart(3, '0');
 
@@ -764,6 +783,192 @@ export default function DniMatrixTab({ paquetes = [], clientes = [] }: DniMatrix
             )}
           </button>
 
+          {/* BOTÓN MASTER DESPLEGABLE DE EXPORTACIÓN */}
+          <div className="export-dropdown-wrapper" ref={exportMenuRef}>
+            <button
+              type="button"
+              onClick={() => setShowExportMenu((prev) => !prev)}
+              className={`btn btn-primary export-master-btn ${showExportMenu ? 'active' : ''}`}
+              title="Generar y exportar documentos Word y PDF"
+              disabled={isExporting}
+            >
+              {isExporting ? (
+                <>
+                  <div className="spinner-sm"></div>
+                  <span>{exportStatusMessage || 'Exportando...'}</span>
+                </>
+              ) : (
+                <>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                    <polyline points="14 2 14 8 20 8"></polyline>
+                    <line x1="12" y1="18" x2="12" y2="12"></line>
+                    <line x1="9" y1="15" x2="12" y2="18"></line>
+                    <line x1="15" y1="15" x2="12" y2="18"></line>
+                  </svg>
+                  <span>Generar Documentos</span>
+                  <span className={`export-count-pill ${stats.ready > 0 ? 'ready' : ''}`}>
+                    {stats.ready}
+                  </span>
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    style={{
+                      transform: showExportMenu ? 'rotate(180deg)' : 'none',
+                      transition: 'transform 0.2s ease',
+                      opacity: 0.85
+                    }}
+                  >
+                    <polyline points="6 9 12 15 18 9"></polyline>
+                  </svg>
+                </>
+              )}
+            </button>
+
+            {showExportMenu && (
+              <div className="export-dropdown-menu">
+                <div className="export-menu-header">
+                  <div className="export-menu-title">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                      <polyline points="14 2 14 8 20 8"></polyline>
+                    </svg>
+                    <span>DOCUMENTOS WORD / PDF (A4)</span>
+                  </div>
+                  <span className="export-menu-stats">
+                    {stats.ready} {stats.ready === 1 ? 'listo' : 'listos'} ({stats.ready} {stats.ready === 1 ? 'pág' : 'págs'})
+                  </span>
+                </div>
+
+                <div className="export-menu-items">
+                  {/* Opción 1: Escoger Carpeta */}
+                  <button
+                    type="button"
+                    className="export-menu-item opt-folder"
+                    disabled={isExporting || stats.ready === 0}
+                    onClick={() => {
+                      setShowExportMenu(false);
+                      handleExportFolder();
+                    }}
+                  >
+                    <div className="export-item-icon folder-icon">
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                        <polyline points="12 11 12 17 15 14"></polyline>
+                        <line x1="9" y1="14" x2="12" y2="17"></line>
+                      </svg>
+                    </div>
+                    <div className="export-item-text">
+                      <div className="export-item-title">Escoger Carpeta donde Guardar</div>
+                      <div className="export-item-desc">Guarda los Word sueltos directamente (Sin comprimir)</div>
+                    </div>
+                  </button>
+
+                  {/* Opción 2: Word Maestro Único */}
+                  <button
+                    type="button"
+                    className="export-menu-item opt-master"
+                    disabled={isExporting || stats.ready === 0}
+                    onClick={() => {
+                      setShowExportMenu(false);
+                      handleExportMaster();
+                    }}
+                  >
+                    <div className="export-item-icon master-icon">
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                        <polyline points="14 2 14 8 20 8"></polyline>
+                        <line x1="16" y1="13" x2="8" y2="13"></line>
+                        <line x1="16" y1="17" x2="8" y2="17"></line>
+                        <polyline points="10 9 9 9 8 9"></polyline>
+                      </svg>
+                    </div>
+                    <div className="export-item-text">
+                      <div className="export-item-title">Word Maestro Único</div>
+                      <div className="export-item-desc">1 archivo Word con todas las hojas</div>
+                    </div>
+                  </button>
+
+                  {/* Opción 3: Descargar en ZIP */}
+                  <button
+                    type="button"
+                    className="export-menu-item opt-zip"
+                    disabled={isExporting || stats.ready === 0}
+                    onClick={() => {
+                      setShowExportMenu(false);
+                      handleExportZip();
+                    }}
+                  >
+                    <div className="export-item-icon zip-icon">
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <polyline points="21 8 21 21 3 21 3 8"></polyline>
+                        <rect x="1" y="3" width="22" height="5"></rect>
+                        <line x1="10" y1="12" x2="14" y2="12"></line>
+                      </svg>
+                    </div>
+                    <div className="export-item-text">
+                      <div className="export-item-title">Descargar en ZIP</div>
+                      <div className="export-item-desc">Archivos .docx comprimidos</div>
+                    </div>
+                  </button>
+
+                  <div className="export-menu-divider"></div>
+
+                  {/* Opción 4: Descargar en PDF (.zip) */}
+                  <button
+                    type="button"
+                    className="export-menu-item opt-pdf-zip"
+                    disabled={isExporting || stats.ready === 0}
+                    onClick={() => {
+                      setShowExportMenu(false);
+                      handleExportPdfZip();
+                    }}
+                  >
+                    <div className="export-item-icon pdf-icon">
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                        <polyline points="14 2 14 8 20 8"></polyline>
+                        <line x1="9" y1="15" x2="15" y2="15"></line>
+                      </svg>
+                    </div>
+                    <div className="export-item-text">
+                      <div className="export-item-title">Descargar en PDF (.zip)</div>
+                      <div className="export-item-desc">Archivos .pdf directos</div>
+                    </div>
+                  </button>
+
+                  <div className="export-menu-divider"></div>
+
+                  {/* Opción 5: Conversor Masivo DOCX a PDF */}
+                  <button
+                    type="button"
+                    className="export-menu-item opt-converter"
+                    onClick={() => {
+                      setShowExportMenu(false);
+                      setShowPdfModal(true);
+                    }}
+                  >
+                    <div className="export-item-icon converter-icon">
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <polyline points="23 4 23 10 17 10"></polyline>
+                        <polyline points="1 20 1 14 7 14"></polyline>
+                        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+                      </svg>
+                    </div>
+                    <div className="export-item-text">
+                      <div className="export-item-title">Conversor Masivo DOCX a PDF</div>
+                      <div className="export-item-desc">Convierte carpetas enteras de Word a PDF</div>
+                    </div>
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
           <button onClick={() => setShowConfigModal(true)} className="btn btn-secondary" title="Ajustes de lote y cupos">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <circle cx="12" cy="12" r="3"></circle>
@@ -834,284 +1039,10 @@ export default function DniMatrixTab({ paquetes = [], clientes = [] }: DniMatrix
                 }}
                 maxLength={60}
               />
-              <button
-                type="button"
-                className="btn btn-secondary"
-                style={{ padding: '6px 10px', fontSize: '0.75rem' }}
-                title="Vincular con Cliente / Guía WR de AMEX"
-                onClick={() => setShowAmexLinkModal(true)}
-              >
-                ⚡ AMEX
-              </button>
             </div>
           </div>
 
-          {/* Área de Pegado y Simulación A4 */}
-          <div className="sheet-simulation-wrapper">
-            <div className="sheet-simulation-header">
-              <span>
-                Hoja A4 (21.0 &times; 29.7 cm) &bull; Tamaño DNI: <strong>{DNI_SIZE_PRESETS[printSize]?.widthCm || 16.5} &times; {DNI_SIZE_PRESETS[printSize]?.heightCm || 10.4} cm</strong> ({DNI_SIZE_PRESETS[printSize]?.id === 'large' ? 'Grande - Ocupa la hoja' : DNI_SIZE_PRESETS[printSize]?.id === 'xlarge' ? 'Extra Grande' : 'Estándar'})
-              </span>
-              <span className="tip-kbd">
-                Portapapeles activo: Presiona <kbd>Ctrl+V</kbd> en cualquier momento
-              </span>
-            </div>
-
-            <div
-              className="sheet-surface"
-              onDragOver={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                e.dataTransfer.dropEffect = 'copy';
-              }}
-              onDrop={async (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                setDragHoverSide(null);
-                const b64 = await extractBase64FromDataTransfer(e.dataTransfer);
-                if (b64) {
-                  await processImagePayload(b64, focusedSide);
-                }
-              }}
-            >
-              {/* CASILLA ANVERSO (SUPERIOR) */}
-              <div
-                className={`dni-dropzone ${activeSlot.anverso ? 'has-image' : ''} ${
-                  focusedSide === 'anverso' ? 'active-target' : ''
-                } ${dragHoverSide === 'anverso' ? 'drag-active' : ''}`}
-                tabIndex={0}
-                onClick={() => setFocusedSide('anverso')}
-                onDragOver={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  e.dataTransfer.dropEffect = 'copy';
-                  if (dragHoverSide !== 'anverso') setDragHoverSide('anverso');
-                }}
-                onDragEnter={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  setDragHoverSide('anverso');
-                }}
-                onDragLeave={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  setDragHoverSide(null);
-                }}
-                onDrop={async (e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  setDragHoverSide(null);
-                  const b64 = await extractBase64FromDataTransfer(e.dataTransfer);
-                  if (b64) {
-                    await processImagePayload(b64, 'anverso');
-                  }
-                }}
-              >
-                <div className="dropzone-header">
-                  <div className="dropzone-title">
-                    <span className="side-badge front">1</span>
-                    <strong>ANVERSO (FRENTE)</strong>
-                    <span className="dimension-tag">12.0 &times; 7.5 cm</span>
-                  </div>
-                  <div className="dropzone-actions">
-                    <button
-                      type="button"
-                      className="action-btn"
-                      title="Rotar 90° izquierda"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        rotateSide('anverso', 270);
-                      }}
-                    >
-                      ↺
-                    </button>
-                    <button
-                      type="button"
-                      className="action-btn"
-                      title="Rotar 90° derecha"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        rotateSide('anverso', 90);
-                      }}
-                    >
-                      ↻
-                    </button>
-                    <button
-                      type="button"
-                      className="action-btn danger"
-                      title="Eliminar anverso"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        clearSide('anverso');
-                      }}
-                    >
-                      &times;
-                    </button>
-                  </div>
-                </div>
-
-                {activeSlot.anverso ? (
-                  <div className="dropzone-preview">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={activeSlot.anverso}
-                      alt="Anverso"
-                      style={{
-                        transform: `rotate(${activeSlot.anversoRotation || 0}deg)`
-                      }}
-                    />
-                  </div>
-                ) : (
-                  <div className="dropzone-placeholder">
-                    <div className="placeholder-icon">
-                      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                        <path d="M16 16v1a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h1" />
-                        <rect x="8" y="3" width="12" height="14" rx="2" />
-                        <path d="M12 8v4" />
-                        <path d="M10 10h4" />
-                      </svg>
-                    </div>
-                    <div className="placeholder-text">
-                      <span className="placeholder-main">
-                        Haz clic o pega el <strong>Anverso</strong> aquí
-                      </span>
-                      <span className="placeholder-sub">
-                        Copia en WhatsApp Web &rarr; presiona <kbd>Ctrl + V</kbd>
-                      </span>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* BOTÓN CENTRAL DE INTERCAMBIO */}
-              <div className="swap-bar">
-                <div className="swap-line"></div>
-                <button
-                  type="button"
-                  className="btn-swap"
-                  onClick={swapSides}
-                  title="Intercambiar Anverso y Reverso si se pegaron invertidos"
-                >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M7 16V4m0 0L3 8m4-4l4 4m6 4v12m0 0l4-4m-4 4l-4-4" />
-                  </svg>
-                  <span>Intercambiar Caras</span>
-                </button>
-                <div className="swap-line"></div>
-              </div>
-
-              {/* CASILLA REVERSO (INFERIOR) */}
-              <div
-                className={`dni-dropzone ${activeSlot.reverso ? 'has-image' : ''} ${
-                  focusedSide === 'reverso' ? 'active-target' : ''
-                } ${dragHoverSide === 'reverso' ? 'drag-active' : ''}`}
-                tabIndex={0}
-                onClick={() => setFocusedSide('reverso')}
-                onDragOver={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  e.dataTransfer.dropEffect = 'copy';
-                  if (dragHoverSide !== 'reverso') setDragHoverSide('reverso');
-                }}
-                onDragEnter={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  setDragHoverSide('reverso');
-                }}
-                onDragLeave={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  setDragHoverSide(null);
-                }}
-                onDrop={async (e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  setDragHoverSide(null);
-                  const b64 = await extractBase64FromDataTransfer(e.dataTransfer);
-                  if (b64) {
-                    await processImagePayload(b64, 'reverso');
-                  }
-                }}
-              >
-                <div className="dropzone-header">
-                  <div className="dropzone-title">
-                    <span className="side-badge back">2</span>
-                    <strong>REVERSO (POSTERIOR)</strong>
-                    <span className="dimension-tag">12.0 &times; 7.5 cm</span>
-                  </div>
-                  <div className="dropzone-actions">
-                    <button
-                      type="button"
-                      className="action-btn"
-                      title="Rotar 90° izquierda"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        rotateSide('reverso', 270);
-                      }}
-                    >
-                      ↺
-                    </button>
-                    <button
-                      type="button"
-                      className="action-btn"
-                      title="Rotar 90° derecha"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        rotateSide('reverso', 90);
-                      }}
-                    >
-                      ↻
-                    </button>
-                    <button
-                      type="button"
-                      className="action-btn danger"
-                      title="Eliminar reverso"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        clearSide('reverso');
-                      }}
-                    >
-                      &times;
-                    </button>
-                  </div>
-                </div>
-
-                {activeSlot.reverso ? (
-                  <div className="dropzone-preview">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={activeSlot.reverso}
-                      alt="Reverso"
-                      style={{
-                        transform: `rotate(${activeSlot.reversoRotation || 0}deg)`
-                      }}
-                    />
-                  </div>
-                ) : (
-                  <div className="dropzone-placeholder">
-                    <div className="placeholder-icon">
-                      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                        <path d="M16 16v1a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h1" />
-                        <rect x="8" y="3" width="12" height="14" rx="2" />
-                        <path d="M12 8v4" />
-                        <path d="M10 10h4" />
-                      </svg>
-                    </div>
-                    <div className="placeholder-text">
-                      <span className="placeholder-main">
-                        Haz clic o pega el <strong>Reverso</strong> aquí
-                      </span>
-                      <span className="placeholder-sub">
-                        Copia en WhatsApp Web &rarr; presiona <kbd>Ctrl + V</kbd>
-                      </span>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Barra de Navegación del Expediente Activo */}
+          {/* Barra de Navegación del Expediente Activo (Superior) */}
           <div className="active-nav-bar">
             <button
               className="btn btn-secondary nav-btn"
@@ -1167,6 +1098,371 @@ export default function DniMatrixTab({ paquetes = [], clientes = [] }: DniMatrix
                 Siguiente Incompleto <kbd>Enter ⏎</kbd>
               </span>
             </button>
+          </div>
+
+          {/* Área de Pegado y Previsualización de DNI */}
+          <div className="sheet-simulation-wrapper">
+            <div className="sheet-view-toolbar">
+              <div className="sheet-view-label">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <rect x="3" y="3" width="18" height="18" rx="2" />
+                  <circle cx="8.5" cy="8.5" r="1.5" />
+                  <polyline points="21 15 16 10 5 21" />
+                </svg>
+                <span>PREVISUALIZACIÓN DNI ({printSize === 'large' ? '16.5 × 10.4 cm' : printSize === 'xlarge' ? '18.0 × 11.4 cm' : '12.0 × 7.5 cm'})</span>
+              </div>
+              <div className="sheet-layout-toggle">
+                <button
+                  type="button"
+                  className={`layout-toggle-btn ${previewLayout === 'side-by-side' ? 'active' : ''}`}
+                  onClick={() => setPreviewLayout('side-by-side')}
+                  title="Ver ambas caras en paralelo (Sin scroll)"
+                >
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <rect x="3" y="3" width="8" height="18" rx="2"></rect>
+                    <rect x="13" y="3" width="8" height="18" rx="2"></rect>
+                  </svg>
+                  <span>Lado a Lado</span>
+                </button>
+                <button
+                  type="button"
+                  className={`layout-toggle-btn ${previewLayout === 'vertical' ? 'active' : ''}`}
+                  onClick={() => setPreviewLayout('vertical')}
+                  title="Ver en formato vertical Hoja A4"
+                >
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <rect x="3" y="3" width="18" height="8" rx="2"></rect>
+                    <rect x="3" y="13" width="18" height="8" rx="2"></rect>
+                  </svg>
+                  <span>Hoja A4</span>
+                </button>
+              </div>
+            </div>
+
+            <div
+              className={`sheet-surface ${previewLayout === 'side-by-side' ? 'layout-side-by-side' : 'layout-vertical'}`}
+              onDragOver={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                e.dataTransfer.dropEffect = 'copy';
+              }}
+              onDrop={async (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setDragHoverSide(null);
+                const b64 = await extractBase64FromDataTransfer(e.dataTransfer);
+                if (b64) {
+                  await processImagePayload(b64, focusedSide);
+                }
+              }}
+            >
+              {/* CASILLA ANVERSO */}
+              <div
+                className={`dni-dropzone ${activeSlot.anverso ? 'has-image' : ''} ${
+                  focusedSide === 'anverso' ? 'active-target' : ''
+                } ${dragHoverSide === 'anverso' ? 'drag-active' : ''}`}
+                tabIndex={0}
+                onClick={() => setFocusedSide('anverso')}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  e.dataTransfer.dropEffect = 'copy';
+                  if (dragHoverSide !== 'anverso') setDragHoverSide('anverso');
+                }}
+                onDragEnter={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setDragHoverSide('anverso');
+                }}
+                onDragLeave={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setDragHoverSide(null);
+                }}
+                onDrop={async (e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setDragHoverSide(null);
+                  const b64 = await extractBase64FromDataTransfer(e.dataTransfer);
+                  if (b64) {
+                    await processImagePayload(b64, 'anverso');
+                  }
+                }}
+              >
+                <div className="dropzone-header">
+                  <div className="dropzone-title">
+                    <span className="side-badge front">1</span>
+                    <strong>ANVERSO (FRENTE)</strong>
+                    <span className="dimension-tag">{DNI_SIZE_PRESETS[printSize]?.widthCm || 16.5} &times; {DNI_SIZE_PRESETS[printSize]?.heightCm || 10.4} cm</span>
+                  </div>
+                  <div className="dropzone-actions">
+                    {activeSlot.anverso && (
+                      <button
+                        type="button"
+                        className="action-btn"
+                        title="Ver en grande / Zoom"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setZoomImage({
+                            url: activeSlot.anverso!,
+                            title: `Anverso • Cupo #${padNum(activeSlotId)}${activeSlot.label ? ` (${activeSlot.label})` : ''}`,
+                            rotation: activeSlot.anversoRotation || 0
+                          });
+                        }}
+                      >
+                        🔍
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      className="action-btn"
+                      title="Rotar 90° izquierda"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        rotateSide('anverso', 270);
+                      }}
+                    >
+                      ↺
+                    </button>
+                    <button
+                      type="button"
+                      className="action-btn"
+                      title="Rotar 90° derecha"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        rotateSide('anverso', 90);
+                      }}
+                    >
+                      ↻
+                    </button>
+                    <button
+                      type="button"
+                      className="action-btn danger"
+                      title="Eliminar anverso"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        clearSide('anverso');
+                      }}
+                    >
+                      &times;
+                    </button>
+                  </div>
+                </div>
+
+                {activeSlot.anverso ? (
+                  <div
+                    className="dropzone-preview"
+                    title="Haz clic para ampliar en grande"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setZoomImage({
+                        url: activeSlot.anverso!,
+                        title: `Anverso • Cupo #${padNum(activeSlotId)}${activeSlot.label ? ` (${activeSlot.label})` : ''}`,
+                        rotation: activeSlot.anversoRotation || 0
+                      });
+                    }}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={activeSlot.anverso}
+                      alt="Anverso"
+                      style={{
+                        transform: `rotate(${activeSlot.anversoRotation || 0}deg)`
+                      }}
+                    />
+                  </div>
+                ) : (
+                  <div className="dropzone-placeholder">
+                    <div className="placeholder-icon">
+                      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                        <path d="M16 16v1a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h1" />
+                        <rect x="8" y="3" width="12" height="14" rx="2" />
+                        <path d="M12 8v4" />
+                        <path d="M10 10h4" />
+                      </svg>
+                    </div>
+                    <div className="placeholder-text">
+                      <span className="placeholder-main">
+                        Haz clic o pega el <strong>Anverso</strong> aquí
+                      </span>
+                      <span className="placeholder-sub">
+                        Copia en WhatsApp Web &rarr; presiona <kbd>Ctrl + V</kbd>
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* BOTÓN CENTRAL DE INTERCAMBIO */}
+              {previewLayout === 'side-by-side' ? (
+                <div className="swap-col">
+                  <button
+                    type="button"
+                    className="btn-swap-pill"
+                    onClick={swapSides}
+                    title="Intercambiar Anverso ⇄ Reverso si se pegaron invertidos"
+                  >
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                    </svg>
+                    <span>Cambiar</span>
+                  </button>
+                </div>
+              ) : (
+                <div className="swap-bar">
+                  <div className="swap-line"></div>
+                  <button
+                    type="button"
+                    className="btn-swap"
+                    onClick={swapSides}
+                    title="Intercambiar Anverso y Reverso si se pegaron invertidos"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M7 16V4m0 0L3 8m4-4l4 4m6 4v12m0 0l4-4m-4 4l-4-4" />
+                    </svg>
+                    <span>Intercambiar Caras</span>
+                  </button>
+                  <div className="swap-line"></div>
+                </div>
+              )}
+
+              {/* CASILLA REVERSO */}
+              <div
+                className={`dni-dropzone ${activeSlot.reverso ? 'has-image' : ''} ${
+                  focusedSide === 'reverso' ? 'active-target' : ''
+                } ${dragHoverSide === 'reverso' ? 'drag-active' : ''}`}
+                tabIndex={0}
+                onClick={() => setFocusedSide('reverso')}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  e.dataTransfer.dropEffect = 'copy';
+                  if (dragHoverSide !== 'reverso') setDragHoverSide('reverso');
+                }}
+                onDragEnter={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setDragHoverSide('reverso');
+                }}
+                onDragLeave={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setDragHoverSide(null);
+                }}
+                onDrop={async (e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setDragHoverSide(null);
+                  const b64 = await extractBase64FromDataTransfer(e.dataTransfer);
+                  if (b64) {
+                    await processImagePayload(b64, 'reverso');
+                  }
+                }}
+              >
+                <div className="dropzone-header">
+                  <div className="dropzone-title">
+                    <span className="side-badge back">2</span>
+                    <strong>REVERSO (POSTERIOR)</strong>
+                    <span className="dimension-tag">{DNI_SIZE_PRESETS[printSize]?.widthCm || 16.5} &times; {DNI_SIZE_PRESETS[printSize]?.heightCm || 10.4} cm</span>
+                  </div>
+                  <div className="dropzone-actions">
+                    {activeSlot.reverso && (
+                      <button
+                        type="button"
+                        className="action-btn"
+                        title="Ver en grande / Zoom"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setZoomImage({
+                            url: activeSlot.reverso!,
+                            title: `Reverso • Cupo #${padNum(activeSlotId)}${activeSlot.label ? ` (${activeSlot.label})` : ''}`,
+                            rotation: activeSlot.reversoRotation || 0
+                          });
+                        }}
+                      >
+                        🔍
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      className="action-btn"
+                      title="Rotar 90° izquierda"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        rotateSide('reverso', 270);
+                      }}
+                    >
+                      ↺
+                    </button>
+                    <button
+                      type="button"
+                      className="action-btn"
+                      title="Rotar 90° derecha"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        rotateSide('reverso', 90);
+                      }}
+                    >
+                      ↻
+                    </button>
+                    <button
+                      type="button"
+                      className="action-btn danger"
+                      title="Eliminar reverso"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        clearSide('reverso');
+                      }}
+                    >
+                      &times;
+                    </button>
+                  </div>
+                </div>
+
+                {activeSlot.reverso ? (
+                  <div
+                    className="dropzone-preview"
+                    title="Haz clic para ampliar en grande"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setZoomImage({
+                        url: activeSlot.reverso!,
+                        title: `Reverso • Cupo #${padNum(activeSlotId)}${activeSlot.label ? ` (${activeSlot.label})` : ''}`,
+                        rotation: activeSlot.reversoRotation || 0
+                      });
+                    }}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={activeSlot.reverso}
+                      alt="Reverso"
+                      style={{
+                        transform: `rotate(${activeSlot.reversoRotation || 0}deg)`
+                      }}
+                    />
+                  </div>
+                ) : (
+                  <div className="dropzone-placeholder">
+                    <div className="placeholder-icon">
+                      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                        <path d="M16 16v1a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h1" />
+                        <rect x="8" y="3" width="12" height="14" rx="2" />
+                        <path d="M12 8v4" />
+                        <path d="M10 10h4" />
+                      </svg>
+                    </div>
+                    <div className="placeholder-text">
+                      <span className="placeholder-main">
+                        Haz clic o pega el <strong>Reverso</strong> aquí
+                      </span>
+                      <span className="placeholder-sub">
+                        Copia en WhatsApp Web &rarr; presiona <kbd>Ctrl + V</kbd>
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         </section>
 
@@ -1313,132 +1609,6 @@ export default function DniMatrixTab({ paquetes = [], clientes = [] }: DniMatrix
             </div>
           </div>
 
-          {/* SECCIÓN DE EXPORTACIÓN INMEDIATA */}
-          <div className="matrix-export-card">
-            <div className="export-card-title">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                <polyline points="14 2 14 8 20 8"></polyline>
-                <line x1="12" y1="18" x2="12" y2="12"></line>
-                <line x1="9" y1="15" x2="12" y2="18"></line>
-                <line x1="15" y1="15" x2="12" y2="18"></line>
-              </svg>
-              <strong>GENERAR DOCUMENTOS WORD (A4)</strong>
-            </div>
-
-            <p className="export-summary-text">
-              Hay <strong>{stats.ready} expedientes completos</strong> listos para exportar ({stats.ready} páginas A4).
-            </p>
-
-            <div className="export-buttons-stack">
-              {/* Botón Principal: Escoger Carpeta donde Guardar */}
-              <button
-                className="btn btn-success btn-export btn-export-main"
-                disabled={isExporting || stats.ready === 0}
-                onClick={handleExportFolder}
-                title="Haz clic para elegir una carpeta en tu equipo y guardar todos los archivos Word sueltos sin comprimir"
-              >
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
-                  <polyline points="12 11 12 17 15 14"></polyline>
-                  <line x1="9" y1="14" x2="12" y2="17"></line>
-                </svg>
-                <div className="btn-text-block">
-                  <span className="btn-title">Escoger Carpeta donde Guardar</span>
-                  <span className="btn-desc">Guarda los Word sueltos directamente (Sin comprimir)</span>
-                </div>
-              </button>
-
-              <div className="export-buttons-grid">
-                {/* Opción 2: Archivo Maestro Único */}
-                <button
-                  className="btn btn-primary btn-export"
-                  disabled={isExporting || stats.ready === 0}
-                  onClick={handleExportMaster}
-                >
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                    <polyline points="14 2 14 8 20 8"></polyline>
-                  </svg>
-                  <div className="btn-text-block">
-                    <span className="btn-title">Word Maestro Único</span>
-                    <span className="btn-desc">1 archivo con todas las hojas</span>
-                  </div>
-                </button>
-
-                {/* Opción 3: Descargar ZIP Word */}
-                <button
-                  className="btn btn-secondary btn-export"
-                  disabled={isExporting || stats.ready === 0}
-                  onClick={handleExportZip}
-                >
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <polyline points="21 8 21 21 3 21 3 8"></polyline>
-                    <rect x="1" y="3" width="22" height="5"></rect>
-                    <line x1="10" y1="12" x2="14" y2="12"></line>
-                  </svg>
-                  <div className="btn-text-block">
-                    <span className="btn-title">Descargar en ZIP</span>
-                    <span className="btn-desc">Archivos .docx comprimidos</span>
-                  </div>
-                </button>
-
-                {/* Opción 4: Descargar en PDF (.zip) */}
-                <button
-                  className="btn btn-export"
-                  style={{
-                    background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.18) 0%, rgba(220, 38, 38, 0.25) 100%)',
-                    borderColor: 'rgba(239, 68, 68, 0.45)',
-                    color: '#fca5a5'
-                  }}
-                  disabled={isExporting || stats.ready === 0}
-                  onClick={handleExportPdfZip}
-                >
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2">
-                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                    <polyline points="14 2 14 8 20 8"></polyline>
-                    <line x1="9" y1="15" x2="15" y2="15"></line>
-                  </svg>
-                  <div className="btn-text-block">
-                    <span className="btn-title" style={{ color: '#ffffff' }}>Descargar en PDF (.zip)</span>
-                    <span className="btn-desc" style={{ color: '#fca5a5' }}>Archivos .pdf directos</span>
-                  </div>
-                </button>
-              </div>
-            </div>
-
-            <div
-              className="pdf-quick-banner"
-              style={{
-                marginTop: '10px',
-                paddingTop: '10px',
-                borderTop: '1px dashed var(--border-subtle)'
-              }}
-            >
-              <button
-                className="btn btn-secondary"
-                style={{ width: '100%', borderColor: 'rgba(239, 68, 68, 0.35)', color: '#fca5a5' }}
-                type="button"
-                onClick={() => setShowPdfModal(true)}
-                title="Convertir una carpeta existente de archivos Word a PDF"
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2">
-                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                  <polyline points="14 2 14 8 20 8"></polyline>
-                  <line x1="9" y1="15" x2="15" y2="15"></line>
-                </svg>
-                <span>Conversor Masivo DOCX a PDF</span>
-              </button>
-            </div>
-
-            {/* Indicador de procesamiento */}
-            {isExporting && (
-              <div className="export-loading">
-                <div className="spinner"></div>
-                <span>{exportStatusMessage || 'Generando documento...'}</span>
-              </div>
-            )}
-          </div>
         </aside>
       </main>
 
@@ -1948,6 +2118,60 @@ export default function DniMatrixTab({ paquetes = [], clientes = [] }: DniMatrix
               <button onClick={() => setShowAmexLinkModal(false)} className="btn btn-secondary">
                 Cancelar
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: ZOOM / AMPLIAR DNI */}
+      {zoomImage && (
+        <div className="modal-overlay" onClick={() => setZoomImage(null)} style={{ zIndex: 1500 }}>
+          <div
+            className="zoom-lightbox-card"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              maxWidth: '92vw',
+              maxHeight: '92vh',
+              width: '800px',
+              background: '#07090e',
+              border: '1px solid var(--border-medium)',
+              borderRadius: 'var(--radius-lg)',
+              padding: '16px',
+              display: 'flex',
+              flexDirection: 'column',
+              boxShadow: '0 24px 60px rgba(0, 0, 0, 0.9)'
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '1.1rem' }}>🔍</span>
+                <h3 style={{ fontSize: '0.95rem', color: '#fff', margin: 0, fontWeight: 700 }}>{zoomImage.title}</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setZoomImage(null)}
+                className="modal-close-btn"
+                style={{ fontSize: '1.3rem', padding: '4px 10px', background: 'transparent', border: 'none', color: '#cbd5e1', cursor: 'pointer' }}
+              >
+                &times;
+              </button>
+            </div>
+            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', minHeight: '350px', maxHeight: '76vh', background: '#020408', borderRadius: '6px' }}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={zoomImage.url}
+                alt="DNI Zoom"
+                style={{
+                  maxWidth: '100%',
+                  maxHeight: '75vh',
+                  objectFit: 'contain',
+                  transform: `rotate(${zoomImage.rotation || 0}deg)`,
+                  borderRadius: '4px'
+                }}
+              />
+            </div>
+            <div style={{ textAlign: 'center', marginTop: '10px', fontSize: '0.74rem', color: 'var(--text-muted)' }}>
+              Presiona Esc o haz clic fuera para cerrar
             </div>
           </div>
         </div>
